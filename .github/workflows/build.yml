@@ -70,4 +70,4 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: sie-duckstation
-          path: DuckStation\sie-duckstation.7z
+          path: sie-duckstation.7z
