@@ -36,8 +36,12 @@ jobs:
           import os, re
 
           def rd(p):
+              import os
+              if not os.path.exists(p): return ''
               with open(p, 'r', encoding='utf-8', errors='replace') as f: return f.read()
           def wr(p, c):
+              import os
+              os.makedirs(os.path.dirname(p) if os.path.dirname(p) else '.', exist_ok=True)
               with open(p, 'w', encoding='utf-8') as f: f.write(c)
           def patch(path, anchor, ins, after=True):
               c = rd(path)
