@@ -1,0 +1,54 @@
+name: Build SIE
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone DuckStation
+        run: git clone --depth 1 https://github.com/stenzek/DuckStation.git
+        shell: cmd
+
+      - name: Apply patch
+        run: |
+          cd DuckStation
+          git apply ..\duckstation-sie.patch
+          python -c "p='src/duckstation-qt/duckstation-qt.vcxproj';f=open(p,'r');c=f.read();f.close();c=c.replace('<ClCompile Include=\"settingswindow.cpp\" />','<ClCompile Include=\"settingswindow.cpp\" />\n    <ClCompile Include=\"sisesettingswidget.cpp\" />');c=c.replace('<ClInclude Include=\"settingswindow.h\" />','<ClInclude Include=\"settingswindow.h\" />\n    <ClInclude Include=\"sisesettingswidget.h\" />');f=open(p,'w');f.write(c);f.close()"
+        shell: cmd
+
+      - name: Deps
+        run: |
+          cd DuckStation
+          set /p V=<dep\PREBUILT-VERSION
+          curl -L -o d.7z "https://github.com/duckstation/dependencies/releases/download/%V%/deps-windows-x64.7z"
+          7z x d.7z -o"dep\prebuilt" -y
+          mkdir dep\zlib\include 2>nul
+          copy dep\prebuilt\windows-x64\include\zlib.h dep\zlib\include\
+          copy dep\prebuilt\windows-x64\include\zconf.h dep\zlib\include\
+        shell: cmd
+
+      - name: Build
+        run: |
+          cd DuckStation
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" duckstation.sln /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /m
+        shell: powershell
+
+      - name: Package
+        run: |
+          echo. > DuckStation\bin\x64\portable.txt
+          echo [sise] > DuckStation\bin\x64\settings.ini
+          echo enabled=true >> DuckStation\bin\x64\settings.ini
+          echo z_scale_factor=4.0 >> DuckStation\bin\x64\settings.ini
+          7z a sie.7z DuckStation\bin\x64\*
+        shell: cmd
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: sie-duckstation
+          path: sie.7z
