@@ -43,7 +43,7 @@ jobs:
       - name: Build
         run: |
           cd DuckStation
-          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" duckstation.sln /t:Build /p:Platform=x64 /p:Configuration=ReleaseLTCG /m
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" duckstation.sln /t:Build /p:Platform=x64 /p:Configuration=ReleaseLTCG /p:PlatformToolset=v143 /m
         shell: powershell
 
       - name: Package
