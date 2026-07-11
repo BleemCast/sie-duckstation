@@ -35,9 +35,8 @@ jobs:
         shell: bash
         run: |
           set -e
-          # RSIL source is embedded as base64 in a file written by a previous step
-          # (env vars have a 32KB limit on Windows, so we write to file instead)
-          cat rsil_source.b64 | base64 -d > rsil.tar
+          # RSIL source is stored as rsil-source.tar in the repo
+          cp rsil-repo/rsil-source.tar rsil.tar
           mkdir -p rsil && tar xf rsil.tar -C rsil && rm rsil.tar
           echo "RSIL: $(find rsil -name '*.cpp' -o -name '*.h' | wc -l) files"
           grep -q "analyze_branch_safety" rsil/src/MipsPatternScanner.cpp && echo "D3: OK" || exit 1
