@@ -134,9 +134,7 @@ vcxproj = '''<?xml version="1.0" encoding="utf-8"?>
     <ClCompile Include="src\\Predictor.cpp" /><ClCompile Include="src\\RSILSubsystem.cpp" />
     <ClCompile Include="src\\ScenePatchLayer.cpp" /><ClCompile Include="src\\SpatialCatalog.cpp" />
     <ClCompile Include="src\\TelemetryTap.cpp" /><ClCompile Include="src\\Validator.cpp" />
-    <ClCompile Include="integration\\duckstation\\DuckStationHostAdapter.cpp" />
-    <ClCompile Include="integration\\duckstation\\DuckStationHashProvider.cpp" />
-  </ItemGroup>
+          </ItemGroup>
   <PropertyGroup Label="Globals"><ProjectGuid>''' + os.environ.get("RSIL_GUID", "{B5E8D2F1-3A4C-4E6F-9B7A-1C2D3E4F5A6B}") + '''</ProjectGuid></PropertyGroup>
   <Import Project="..\\vsprops\\StaticLibrary.props" />
   <ItemDefinitionGroup><ClCompile>
