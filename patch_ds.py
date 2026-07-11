@@ -36,14 +36,14 @@ patch(DS + "/src/core/system.cpp", '#include "gpu_dump.h"',
 
 # s_state member
 c = rd(DS + "/src/core/system.cpp")
-if "std::unique_ptr<rsil::RSILSubsystem> rsil;" not in c:
-    c = c.replace("u32 frame_number = 0;", "u32 frame_number = 0;\n  std::unique_ptr<rsil::RSILSubsystem> rsil;", 1)
+if "std::unique_ptr<::rsil::RSILSubsystem> rsil;" not in c:
+    c = c.replace("u32 frame_number = 0;", "u32 frame_number = 0;\n  std::unique_ptr<::rsil::RSILSubsystem> rsil;", 1)
     wr(DS + "/src/core/system.cpp", c)
     print("  OK: s_state.rsil")
 
 # GetRSIL
 patch(DS + "/src/core/system.cpp", "return s_state.frame_number;",
-      "return s_state.frame_number;\n}\n\nrsil::RSILSubsystem* System::GetRSIL()\n{\n  return s_state.rsil.get();")
+      "return s_state.frame_number;\n}\n\nrsil::RSILSubsystem* System::GetRSIL()\n{\n  return s_state.rsil.get(); // returns ::rsil::RSILSubsystem*")
 
 # Initialize
 patch(DS + "/src/core/system.cpp", "s_state.state = State::Running;",
