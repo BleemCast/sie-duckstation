@@ -396,7 +396,7 @@ jobs:
 
       - name: Build
         shell: cmd
-        run: msbuild "duckstation\duckstation.sln" /p:Configuration=Release /p:Platform=x64 /v:minimal
+        run: msbuild "duckstation\duckstation.sln" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /v:minimal
 
       - name: Package with Qt plugins
         shell: bash
