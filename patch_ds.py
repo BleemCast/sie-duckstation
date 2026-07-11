@@ -132,7 +132,7 @@ if "rsil.vcxproj" not in sln:
     pe = '\nProject("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rsil", "dep\\rsil\\rsil.vcxproj", "' + guid + '"\nEndProject\n'
     sln = re.sub(r'(Project\([^}]+\{BA490C0E[^}]+\}[^)]*\)[^\n]*\nEndProject)', lambda m: m.group(1) + pe, sln)
     cfg = ""
-    for c in ["Debug|ARM64","Debug|x64","Debug-Clang|ARM64","Debug-Clang|x64","Debug-Clang-SSE2|ARM64","Debug-Clang-SSE2|x64","DebugFast|ARM64","DebugFast|x64","DebugFast-Clang|ARM64","DebugFast-Clang|x64","Devel-Clang|ARM64","Devel-Clang|x64","Release|ARM64","Release|x64","Release-Clang|ARM64","Release-Clang|x64","ReleaseLTCG|ARM64","ReleaseLTCG|x64","ReleaseLTCG-Clang|ARM64","ReleaseLTCG-Clang|x64"]:
+    for c in ["Debug|ARM64","Debug|x64","Debug|Win32","Debug-Clang|ARM64","Debug-Clang|x64","Debug-Clang|Win32","Debug-Clang-SSE2|ARM64","Debug-Clang-SSE2|x64","Debug-Clang-SSE2|Win32","DebugFast|ARM64","DebugFast|x64","DebugFast|Win32","DebugFast-Clang|ARM64","DebugFast-Clang|x64","DebugFast-Clang|Win32","Devel-Clang|ARM64","Devel-Clang|x64","Devel-Clang|Win32","Release|ARM64","Release|x64","Release|Win32","Release-Clang|ARM64","Release-Clang|x64","Release-Clang|Win32","ReleaseLTCG|ARM64","ReleaseLTCG|x64","ReleaseLTCG|Win32","ReleaseLTCG-Clang|ARM64","ReleaseLTCG-Clang|x64","ReleaseLTCG-Clang|Win32"]:
         config, plat = c.split("|")
         target = "Debug|x64" if ("Debug" in config or "Devel" in config) else "Release|x64"
         cfg += "\t" + guid + "." + c + ".ActiveCfg = " + target + "\n"
