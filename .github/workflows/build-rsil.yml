@@ -346,30 +346,30 @@ jobs:
         shell: bash
         run: |
           cat > duckstation/dep/rsil/rsil.vcxproj << 'XMLEOF'
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\vsprops\Configurations.props" />
-  <ItemGroup>
-    <ClCompile Include="src\AdjacencyGraph.cpp" /><ClCompile Include="src\ClusterSignature.cpp" />
-    <ClCompile Include="src\DebugOverlay.cpp" /><ClCompile Include="src\GpuPacketParser.cpp" />
-    <ClCompile Include="src\HeadlessPrePass.cpp" /><ClCompile Include="src\HostPreRegistrar.cpp" />
-    <ClCompile Include="src\MipsPatternScanner.cpp" /><ClCompile Include="src\Persistence.cpp" />
-    <ClCompile Include="src\Predictor.cpp" /><ClCompile Include="src\RSILSubsystem.cpp" />
-    <ClCompile Include="src\ScenePatchLayer.cpp" /><ClCompile Include="src\SpatialCatalog.cpp" />
-    <ClCompile Include="src\TelemetryTap.cpp" /><ClCompile Include="src\Validator.cpp" />
-    <ClCompile Include="integration\duckstation\DuckStationHostAdapter.cpp" />
-    <ClCompile Include="integration\duckstation\DuckStationHashProvider.cpp" />
-  </ItemGroup>
-  <PropertyGroup Label="Globals"><ProjectGuid>${{ env.RSIL_GUID }}</ProjectGuid></PropertyGroup>
-  <Import Project="..\vsprops\StaticLibrary.props" />
-  <ItemDefinitionGroup><ClCompile>
-    <AdditionalIncludeDirectories>$(ProjectDir)\include;$(SolutionDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    <PreprocessorDefinitions>RSIL_DUCKSTATION_INTEGRATED;RSIL_HAS_SQLITE=1;RSIL_HAS_IMGUI=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-    <LanguageStandard>stdcpp20</LanguageStandard><ConformanceMode>false</ConformanceMode>
-    <DisableSpecificWarnings>4244;4267;4146;4458;4324</DisableSpecificWarnings>
-  </ClCompile></ItemDefinitionGroup>
-  <Import Project="..\vsprops\Targets.props" />
-</Project>
+          <?xml version="1.0" encoding="utf-8"?>
+          <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+            <Import Project="..\vsprops\Configurations.props" />
+            <ItemGroup>
+              <ClCompile Include="src\AdjacencyGraph.cpp" /><ClCompile Include="src\ClusterSignature.cpp" />
+              <ClCompile Include="src\DebugOverlay.cpp" /><ClCompile Include="src\GpuPacketParser.cpp" />
+              <ClCompile Include="src\HeadlessPrePass.cpp" /><ClCompile Include="src\HostPreRegistrar.cpp" />
+              <ClCompile Include="src\MipsPatternScanner.cpp" /><ClCompile Include="src\Persistence.cpp" />
+              <ClCompile Include="src\Predictor.cpp" /><ClCompile Include="src\RSILSubsystem.cpp" />
+              <ClCompile Include="src\ScenePatchLayer.cpp" /><ClCompile Include="src\SpatialCatalog.cpp" />
+              <ClCompile Include="src\TelemetryTap.cpp" /><ClCompile Include="src\Validator.cpp" />
+              <ClCompile Include="integration\duckstation\DuckStationHostAdapter.cpp" />
+              <ClCompile Include="integration\duckstation\DuckStationHashProvider.cpp" />
+            </ItemGroup>
+            <PropertyGroup Label="Globals"><ProjectGuid>${{ env.RSIL_GUID }}</ProjectGuid></PropertyGroup>
+            <Import Project="..\vsprops\StaticLibrary.props" />
+            <ItemDefinitionGroup><ClCompile>
+              <AdditionalIncludeDirectories>$(ProjectDir)\include;$(SolutionDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+              <PreprocessorDefinitions>RSIL_DUCKSTATION_INTEGRATED;RSIL_HAS_SQLITE=1;RSIL_HAS_IMGUI=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+              <LanguageStandard>stdcpp20</LanguageStandard><ConformanceMode>false</ConformanceMode>
+              <DisableSpecificWarnings>4244;4267;4146;4458;4324</DisableSpecificWarnings>
+            </ClCompile></ItemDefinitionGroup>
+            <Import Project="..\vsprops\Targets.props" />
+          </Project>
           XMLEOF
           python3 << 'PYEND'
 import re, os
