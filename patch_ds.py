@@ -140,7 +140,7 @@ vcxproj = '''<?xml version="1.0" encoding="utf-8"?>
   <PropertyGroup Label="Globals"><ProjectGuid>''' + os.environ.get("RSIL_GUID", "{B5E8D2F1-3A4C-4E6F-9B7A-1C2D3E4F5A6B}") + '''</ProjectGuid></PropertyGroup>
   <Import Project="..\\vsprops\\StaticLibrary.props" />
   <ItemDefinitionGroup><ClCompile>
-    <AdditionalIncludeDirectories>$(ProjectDir)\\include;$(SolutionDir)src;$(SolutionDir)dep\\imgui\\include;$(SolutionDir)dep\\imgui;$(SolutionDir)dep\prebuilt\windows-x64\include;$(SolutionDir)src\core;$(SolutionDir)src\common;$(SolutionDir)src\util;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    <AdditionalIncludeDirectories>$(ProjectDir)\\include;$(SolutionDir)src;$(SolutionDir)dep\\imgui\\include;$(SolutionDir)dep\\imgui;$(SolutionDir)dep\prebuilt\windows-x64\include;$(SolutionDir)src\core;$(SolutionDir)src\common;$(SolutionDir)src\\util;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     <PreprocessorDefinitions>RSIL_DUCKSTATION_INTEGRATED;RSIL_HAS_SQLITE=1;RSIL_HAS_IMGUI=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     <LanguageStandard>stdcpp20</LanguageStandard><ConformanceMode>false</ConformanceMode>
     <DisableSpecificWarnings>4244;4267;4146;4458;4324</DisableSpecificWarnings>
