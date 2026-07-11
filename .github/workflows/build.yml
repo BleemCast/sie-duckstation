@@ -13,7 +13,6 @@ env:
   DUCKSTATION_REF: "v0.1-11515"
   DEPS_TAG: "release-20260614"
   RSIL_GUID: "{B5E8D2F1-3A4C-4E6F-9B7A-1C2D3E4F5A6B}"
-  # RSIL_SOURCE_B64 is written to file in step 2 (too long for env)
 
 jobs:
   build:
