@@ -96,6 +96,15 @@ if "SetRSILZScale" not in c:
     wr(DS + "/src/core/gte.cpp", c)
     print("  OK: GTE Z-scale")
 
+
+# Fix DebugOverlay.cpp: const bool* → bool* for ImGui::Begin
+do_path = DS + "/dep/rsil/src/DebugOverlay.cpp"
+c = rd(do_path)
+if "const_cast<bool*>(&cfg_.flags.overlay)" not in c:
+    c = c.replace("&cfg_.flags.overlay", "const_cast<bool*>(&cfg_.flags.overlay)")
+    wr(do_path, c)
+    print("  OK: DebugOverlay.cpp const_cast fix")
+
 # Generate rsil.vcxproj
 vcxproj = '''<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
