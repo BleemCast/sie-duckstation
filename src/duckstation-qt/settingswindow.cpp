@@ -3,6 +3,7 @@
 
 #include "settingswindow.h"
 #include "achievementsettingswidget.h"
+#include "sisesettingswidget.h"
 #include "advancedsettingswidget.h"
 #include "audiosettingswidget.h"
 #include "biossettingswidget.h"
@@ -142,6 +143,8 @@ void SettingsWindow::addPages()
     u":/icons/monochrome/svg/memcard-line.svg"_s,
     tr("<strong>Memory Card Settings</strong><hr>This page lets you control what mode the memory card emulation will "
        "function in, and where the images for these cards will be stored on disk."));
+  addWidget(new SISESettingsWidget(this, m_ui.settingsContainer), tr("Enhanced Mode"),
+    u":/icons/monochrome/svg/eye-line.svg"_s, tr("SIE Scene Inference Engine — suppresses pop-in by extending the game's culling radius."));
   addWidget(new GraphicsSettingsWidget(this, m_ui.settingsContainer), tr("Graphics"),
             u":/icons/monochrome/svg/image-fill.svg"_s,
             tr("<strong>Graphics Settings</strong><hr>These options control how the graphics of the emulated console "

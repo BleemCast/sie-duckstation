@@ -162,6 +162,17 @@ target_include_directories(core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(core PUBLIC Threads::Threads common util)
 target_link_libraries(core PRIVATE xxhash imgui rapidyaml rcheevos cpuinfo::cpuinfo ZLIB::ZLIB zstd::libzstd_shared speex_resampler_headers)
 
+# SIE (Streaming Intercept Engine) — optional Z-scaling / culling interception
+option(WITH_SISE "Enable SIE (Streaming Intercept Engine)" OFF)
+if(WITH_SISE)
+  target_compile_definitions(core PUBLIC "WITH_SISE=1")
+  target_sources(core PRIVATE
+    ../sise/sie.cpp
+    ../sise/sie.h
+  )
+  message(STATUS "SIE: enabled (WITH_SISE)")
+endif()
+
 if(CPU_ARCH_X64)
   target_compile_definitions(core PUBLIC "ENABLE_RECOMPILER=1" "ENABLE_MMAP_FASTMEM=1")
   target_sources(core PRIVATE

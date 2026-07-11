@@ -11,6 +11,7 @@
 #include "gpu_helpers.h"
 #include "gpu_hw_texture_cache.h"
 #include "gpu_sw_rasterizer.h"
+#include "gte.h"
 #include "host.h"
 #include "interrupt_controller.h"
 #include "performance_counters.h"
@@ -22,6 +23,8 @@
 #include "video_shadergen.h"
 #include "video_thread.h"
 #include "video_thread_commands.h"
+
+#include "sise/sie.h"
 
 #include "util/gpu_device.h"
 #include "util/image.h"
@@ -412,6 +415,10 @@ void GPU::Initialize()
   s_locals.texture_enable_mask = !g_settings.gpu_disable_textures;
   s_locals.force_raw_texture = g_settings.gpu_disable_vertex_lighting;
   UpdateCRTCConfig();
+
+#ifdef WITH_SISE
+  SIE::SIEEngine::Get().Initialize();
+#endif
 }
 
 void GPU::Shutdown()
@@ -421,6 +428,10 @@ void GPU::Shutdown()
   s_locals.frame_done_event.Deactivate();
 
   StopRecordingGPUDump();
+
+#ifdef WITH_SISE
+  SIE::SIEEngine::Get().Shutdown();
+#endif
 }
 
 void GPU::UpdateSettings(const Settings& old_settings)

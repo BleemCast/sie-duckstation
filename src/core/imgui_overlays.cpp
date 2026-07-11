@@ -28,6 +28,7 @@
 #include "util/input_manager.h"
 #include "util/media_capture.h"
 #include "util/translation.h"
+#include "sise/sie.h"
 
 #include "common/align.h"
 #include "common/assert.h"
@@ -258,6 +259,26 @@ void ImGuiManager::RenderTextOverlays(const GPUBackend* gpu)
 
   if (g_gpu_settings.display_show_inputs && !paused)
     DrawInputsOverlay();
+
+  if (!paused)
+  {
+    const auto& state = SIE::SIEEngine::Get();
+    const float font_size = ImCeil(18.0f * scale);
+    ImFont* font = ImGuiManager::GetTextFont();
+    ImGui::PushFont(font, font_size, 400.0f);
+    SmallString buf;
+    const char* state_str = "UNKNOWN";
+    switch (state.GetState()) {
+      case SIE::SIEEngine::State::Disabled: state_str = "OFF"; break;
+      case SIE::SIEEngine::State::Active: state_str = "ON"; break;
+    }
+    buf.format("SIE: {} | Scan: {} | Z: {}x", state_str, state.IsScanDone() ? "done" : "...", SIE::g_z_scale);
+    ImGui::Begin("##SIEOverlay", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav);
+    ImGui::TextUnformatted(buf.c_str());
+    ImGui::End();
+    ImGui::PopFont();
+  }
 }
 
 void ImGuiManager::FormatProcessorStat(SmallStringBase& text, double usage, double time)

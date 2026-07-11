@@ -8,6 +8,9 @@
 #include "cpu_disasm.h"
 #include "cpu_pgxp.h"
 #include "gte.h"
+#ifdef WITH_SISE
+#include "sise/sie.h"
+#endif
 #include "host.h"
 #include "pcdrv.h"
 #include "pio.h"
@@ -1949,10 +1952,18 @@ restart_instruction:
             StallUntilGTEComplete();
 
             const u32 value = GTE::ReadRegister(static_cast<u32>(inst.r.rd.GetValue()));
-            WriteRegDelayed(inst.r.rt, value);
+            u32 scaled_value = value;
+
+#ifdef WITH_SISE
+            // SIE Z-scaling: scale SZ/OTZ for the game's culling decision.
+            // PGXP gets the ORIGINAL value so its precision tracking is unaffected.
+            scaled_value = SIE_ScaleZ(static_cast<u32>(inst.r.rd.GetValue()), value);
+#endif
+
+            WriteRegDelayed(inst.r.rt, scaled_value);
 
             if constexpr (pgxp_mode >= PGXPMode::Memory)
-              PGXP::CPU_MFC2(inst, value);
+              PGXP::CPU_MFC2(inst, value);  // PGXP gets ORIGINAL value
           }
           break;
 
@@ -2030,11 +2041,19 @@ restart_instruction:
         MemoryBreakpointCheck<MemoryAccessType::Write>(addr);
       }
 
-      const u32 value = GTE::ReadRegister(ZeroExtend32(static_cast<u8>(inst.i.rt.GetValue())));
+      const u32 orig_value = GTE::ReadRegister(ZeroExtend32(static_cast<u8>(inst.i.rt.GetValue())));
+      u32 value = orig_value;
+
+#ifdef WITH_SISE
+      // SIE Z-scaling for swc2: if storing SZ/OTZ to memory (vertex packet),
+      // scale the depth so the game's later lw + culling comparison sees a smaller Z.
+      value = SIE_ScaleZ(ZeroExtend32(static_cast<u8>(inst.i.rt.GetValue())), orig_value);
+#endif
+
       WriteMemoryWord(addr, value);
 
       if constexpr (pgxp_mode >= PGXPMode::Memory)
-        PGXP::CPU_SWC2(inst, addr, value);
+        PGXP::CPU_SWC2(inst, addr, orig_value);  // PGXP gets ORIGINAL value
     }
     break;
 

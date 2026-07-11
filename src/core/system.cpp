@@ -42,6 +42,8 @@
 #include "system_private.h"
 #include "timers.h"
 #include "video_presenter.h"
+
+#include "sise/sie.h"
 #include "video_thread.h"
 
 #include "util/cd_image.h"
@@ -2000,6 +2002,10 @@ void System::FrameDone()
     SPU::GeneratePendingSamples();
 
     Cheats::ApplyFrameEndCodes();
+
+#ifdef WITH_SISE
+    SIE::SIEEngine::Get().OnFrameEnd();
+#endif
 
     HTTPDownloader::PollRequests();
 

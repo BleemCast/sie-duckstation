@@ -50,6 +50,7 @@
     <ClCompile Include="gpu_sw_rasterizer.cpp" />
     <ClCompile Include="video_thread.cpp" />
     <ClCompile Include="gte.cpp" />
+    <ClCompile Include="..\sise\sie.cpp" />
     <ClCompile Include="dma.cpp" />
     <ClCompile Include="gpu.cpp" />
     <ClCompile Include="gpu_hw.cpp" />
@@ -140,6 +141,7 @@
     <ClInclude Include="video_thread_commands.h" />
     <ClInclude Include="gpu_types.h" />
     <ClInclude Include="gte.h" />
+    <ClInclude Include="..\sise\sie.h" />
     <ClInclude Include="cpu_types.h" />
     <ClInclude Include="dma.h" />
     <ClInclude Include="gpu.h" />
@@ -217,8 +219,9 @@
   <Import Project="core.props" />
   <ItemDefinitionGroup>
     <ClCompile>
+      <PreprocessorDefinitions>WITH_SISE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(Platform)'=='x64' And ($(Configuration.Contains('Debug')) Or $(Configuration.Contains('Devel')))">ZYDIS_DISABLE_ENCODER;ZYDIS_DISABLE_AVX512;ZYDIS_DISABLE_KNC;ZYDIS_STATIC_BUILD;ZYCORE_STATIC_BUILD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)dep\fast_float\include;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)dep\fast_float\include;$(SolutionDir)src;</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Platform)'=='x64' And ($(Configuration.Contains('Debug')) Or $(Configuration.Contains('Devel')))">%(AdditionalIncludeDirectories);$(SolutionDir)dep\zydis\include;$(SolutionDir)dep\zydis\dependencies\zycore\include</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)/%(RelativeDir)/</ObjectFileName>
       <PrecompiledHeader>Use</PrecompiledHeader>

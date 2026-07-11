@@ -9,6 +9,10 @@
 #include "settings.h"
 #include "timing_event.h"
 
+#ifdef WITH_SISE
+#include "sise/sie.h"
+#endif
+
 #include "common/align.h"
 #include "common/assert.h"
 #include "common/log.h"
@@ -2204,6 +2208,14 @@ void CPU::X64Recompiler::Compile_swc2(CompileFlags cf, MemoryAccessSize size, bo
   // PGXP makes this a giant pain.
   if (!g_settings.gpu_pgxp_enable)
   {
+#ifdef WITH_SISE
+    // SIE: scale Z registers before storing to memory.
+    Flush(FLUSH_FOR_C_CALL);
+    cg->mov(RWARG1, index);
+    // RWARG2 already holds the GTE register value
+    cg->call(reinterpret_cast<const void*>(&SIE_ScaleZ));
+    cg->mov(RWARG2, RWRET);
+#endif
     FlushForLoadStore(address, true, use_fastmem);
     const Reg32 addr = ComputeLoadStoreAddressArg(cf, address);
     GenerateStore(addr, RWARG2, size, use_fastmem);
@@ -2216,6 +2228,14 @@ void CPU::X64Recompiler::Compile_swc2(CompileFlags cf, MemoryAccessSize size, bo
   FlushForLoadStore(address, true, use_fastmem);
   ComputeLoadStoreAddressArg(cf, address, addr_reg);
   cg->mov(data_backup, RWARG2);
+#ifdef WITH_SISE
+  // SIE: scale Z for the memory store. PGXP gets the ORIGINAL (in data_backup).
+  Flush(FLUSH_FOR_C_CALL);
+  cg->mov(RWARG1, index);
+  cg->mov(RWARG2, data_backup);
+  cg->call(reinterpret_cast<const void*>(&SIE_ScaleZ));
+  cg->mov(RWARG2, RWRET);
+#endif
   GenerateStore(addr_reg, RWARG2, size, use_fastmem);
 
   Flush(FLUSH_FOR_C_CALL);
@@ -2413,13 +2433,37 @@ void CPU::X64Recompiler::Compile_mfc2(CompileFlags cf)
     return;
   }
 
+#ifdef WITH_SISE
+  // SIE: save the original GTE value to a callee-saved temp BEFORE any C calls
+  // (PGXP below may clobber hreg if it's caller-saved). The saved original is
+  // passed to both PGXP (for precision tracking) and SIE_ScaleZ (as input).
+  // The scaled result goes into hreg → CPU register for the game's clipping check.
+  const Reg32 sie_orig = Reg32(AllocateTempHostReg(HR_CALLEE_SAVED));
+  cg->mov(sie_orig, Reg32(hreg));
+#endif
+
   if (g_settings.gpu_pgxp_enable)
   {
     Flush(FLUSH_FOR_C_CALL);
     cg->mov(RWARG1, inst->bits);
+#ifdef WITH_SISE
+    cg->mov(RWARG2, sie_orig);  // PGXP gets ORIGINAL (safe across C calls)
+#else
     cg->mov(RWARG2, Reg32(hreg));
+#endif
     cg->call(reinterpret_cast<const void*>(&PGXP::CPU_MFC2));
   }
+
+#ifdef WITH_SISE
+  // Scale Z registers (SZ0-SZ3 idx 16-19, OTZ idx 7). The game's culling
+  // comparison sees a smaller depth and doesn't far-clip distant geometry.
+  Flush(FLUSH_FOR_C_CALL);
+  cg->mov(RWARG1, index);
+  cg->mov(RWARG2, sie_orig);
+  cg->call(reinterpret_cast<const void*>(&SIE_ScaleZ));
+  cg->mov(Reg32(hreg), RWRET);  // hreg = scaled value for CPU register
+  FreeHostReg(sie_orig.getIdx());
+#endif
 }
 
 void CPU::X64Recompiler::Compile_mtc2(CompileFlags cf)

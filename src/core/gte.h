@@ -36,3 +36,8 @@ void UpdateFreecam(u64 current_time);
 void ResetFreecam();
 
 } // namespace GTE
+
+// SIE tap: stashes GTE register state after RTPS/RTPT for world-space recovery.
+#ifdef WITH_SISE
+extern "C" void SIE_CaptureGTE();
+#endif
