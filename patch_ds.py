@@ -105,6 +105,15 @@ if "const_cast<bool*>(&cfg_.flags.overlay)" not in c:
     wr(do_path, c)
     print("  OK: DebugOverlay.cpp const_cast fix")
 
+
+# Fix RSILSubsystem.cpp: INFO_LOG is a DuckStation macro not available to RSIL
+rsilsub = DS + "/dep/rsil/src/RSILSubsystem.cpp"
+c = rd(rsilsub)
+if "INFO_LOG" in c and "rsil_log" not in c:
+    c = c.replace("INFO_LOG(", "printf(")
+    wr(rsilsub, c)
+    print("  OK: RSILSubsystem.cpp INFO_LOG -> printf")
+
 # Generate rsil.vcxproj
 vcxproj = '''<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
