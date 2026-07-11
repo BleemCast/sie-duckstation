@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: stenzek/duckstation
-          ref: ${{{{ env.DUCKSTATION_REF }}}}
+          ref: ${{ env.DUCKSTATION_REF }}
           path: duckstation
 
       - name: Extract RSIL source + patch DuckStation
