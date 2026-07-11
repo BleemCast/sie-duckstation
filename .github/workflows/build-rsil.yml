@@ -319,7 +319,7 @@ jobs:
 
           # gte.h
           patch(f"{DS}/src/core/gte.h", "} // namespace GTE",
-                "// RSIL: GTE Z-scale\nvoid SetRSILZScale(float scale);\nvoid SetRSILZScaleActive(bool active);\n} // namespace GTE")
+                "// RSIL: GTE Z-scale\nvoid SetRSILZScale(float scale);\nvoid SetRSILZScaleActive(bool active);", after=False)
 
           # gte.cpp
           c = rd(f"{DS}/src/core/gte.cpp")
