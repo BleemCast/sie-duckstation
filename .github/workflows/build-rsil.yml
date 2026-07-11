@@ -1,9 +1,5 @@
 name: Build RSIL-DuckStation (Self-Contained)
 
-# ONE FILE. Paste as .github/workflows/build.yml. Push to main. Done.
-# Contains ALL RSIL source (base64-embedded), ALL fixes, ALL hooks.
-# Works on an EMPTY repo. Build time: ~40 min.
-
 on:
   workflow_dispatch:
   push:
@@ -19,7 +15,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 90
     steps:
-      - name: Checkout RSIL repo (for rsil-source.tar)
+      - name: Checkout RSIL repo
         uses: actions/checkout@v4
         with:
           path: rsil-repo
@@ -28,10 +24,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: stenzek/duckstation
-          ref: ${{ env.DUCKSTATION_REF }}
+          ref: ${{{{ env.DUCKSTATION_REF }}}}
           path: duckstation
 
-      - name: Extract RSIL + patch DuckStation
+      - name: Extract RSIL source + patch DuckStation
         shell: bash
         run: |
           set -e
@@ -42,362 +38,18 @@ jobs:
           grep -q "json_escape" rsil/src/RSILSubsystem.cpp && echo "D10: OK" || exit 1
           grep -q "desync watchdog" rsil/src/GpuPacketParser.cpp && echo "D12: OK" || exit 1
           grep -q "SignatureRegistry::restore" rsil/src/ClusterSignature.cpp && echo "D13: OK" || exit 1
-          echo "=== Patching DuckStation ==="
-          python3 << 'PYEND'
-          import os, re
-
-          def rd(p):
-              import os
-              if not os.path.exists(p): return ''
-              with open(p, 'r', encoding='utf-8', errors='replace') as f: return f.read()
-          def wr(p, c):
-              import os
-              os.makedirs(os.path.dirname(p) if os.path.dirname(p) else '.', exist_ok=True)
-              with open(p, 'w', encoding='utf-8') as f: f.write(c)
-          def patch(path, anchor, ins, after=True):
-              c = rd(path)
-              if ins.strip() in c: return
-              i = c.find(anchor)
-              if i < 0:
-                  print(f"  WARN: anchor not found in {path}: {anchor[:50]}")
-                  return
-              if after:
-                  e = c.find('\n', i) + 1
-                  c = c[:e] + ins + '\n' + c[e:]
-              else:
-                  c = c[:i] + ins + '\n' + c[i:]
-              wr(path, c)
-              print(f"  OK: {path}")
-
-          # === D3: Write corrected MipsPatternScanner.cpp ===
-          mips = r'''// SPDX-License-Identifier: BSD-3-Clause
-          #include "rsil/MipsPatternScanner.h"
-          #include <algorithm>
-          #include <chrono>
-          #include <cstring>
-          namespace rsil {
-          enum class ResultType { ZeroOrOne, GeneralValue };
-          struct BranchSafety { bool tests_result_reg=false; bool safe_to_max_imm=false; bool degenerate=false; std::string reason; };
-          static inline uint32_t read_code_word(const std::vector<uint8_t>& c, size_t o) {
-              return (uint32_t)c[o]|((uint32_t)c[o+1]<<8)|((uint32_t)c[o+2]<<16)|((uint32_t)c[o+3]<<24); }
-          static BranchSafety analyze_branch_safety(uint32_t bw, uint32_t rr, ResultType rt) {
-              BranchSafety bs; uint32_t op=mips::bits(bw,31,26),rs=mips::bits(bw,25,21),rtf=mips::bits(bw,20,16);
-              if(op==mips::OP_BEQ||op==mips::OP_BNE){bool t=(rs==rr&&rtf==0)||(rtf==rr&&rs==0);if(!t){bs.reason="no";return bs;}bs.tests_result_reg=true;
-                  if(rt==ResultType::ZeroOrOne){if(op==mips::OP_BEQ){bs.safe_to_max_imm=true;bs.reason="beq safe";}else bs.reason="bne unsafe";}else{bs.degenerate=true;bs.reason="eq/ne";}return bs;}
-              if(op==mips::OP_BLEZ||op==mips::OP_BGTZ){if(rs!=rr){bs.reason="no";return bs;}bs.tests_result_reg=true;
-                  if(rt==ResultType::ZeroOrOne){if(op==mips::OP_BLEZ){bs.safe_to_max_imm=true;bs.reason="blez safe";}else bs.reason="bgtz unsafe";}else{if(op==mips::OP_BGTZ){bs.safe_to_max_imm=true;bs.reason="bgtz safe";}else bs.reason="blez unsafe";}return bs;}
-              if(op==mips::OP_REGIMM){if(rs!=rr){bs.reason="no";return bs;}bs.tests_result_reg=true;
-                  if(rt==ResultType::ZeroOrOne){bs.degenerate=true;bs.reason="regimm 0/1";}else{if(rtf==mips::RT_BGEZ){bs.safe_to_max_imm=true;bs.reason="bgez safe";}else bs.reason="bltz unsafe";}return bs;}
-              bs.reason="not branch";return bs; }
-          static const char kPsxExeMagic[8]={'P','S','-','X',' ','E','X','E'};
-          bool parse_psx_exe(const uint8_t* data, size_t size, PsxExeInfo& out) {
-              size_t se=std::min(size,(size_t)0x10000),mo=size;
-              for(size_t i=0;i+8<=se;++i){if(!std::memcmp(data+i,kPsxExeMagic,8)){mo=i;break;}}
-              if(mo>=size)return false;if(mo+0x800>size)return false;
-              const uint8_t* h=data+mo;
-              out.initial_pc=(uint32_t)h[0x10]|((uint32_t)h[0x11]<<8)|((uint32_t)h[0x12]<<16)|((uint32_t)h[0x13]<<24);
-              out.text_addr=(uint32_t)h[0x18]|((uint32_t)h[0x19]<<8)|((uint32_t)h[0x1A]<<16)|((uint32_t)h[0x1B]<<24);
-              out.text_size=(uint32_t)h[0x1C]|((uint32_t)h[0x1D]<<8)|((uint32_t)h[0x1E]<<16)|((uint32_t)h[0x1F]<<24);
-              size_t co=mo+0x800;
-              if(out.text_size==0||out.text_size>0x800000)out.text_size=(uint32_t)std::min(size-co,(size_t)0x200000);
-              size_t av=std::min(size-co,(size_t)out.text_size);
-              out.code.assign(data+co,data+co+av);return true; }
-          MipsPatternScanner::MipsPatternScanner()=default;
-          bool MipsPatternScanner::check_branch_within(const std::vector<uint8_t>& code, size_t offset, int max_dist, std::string& br_type, int& br_dist) const {
-              for(int j=1;j<=max_dist&&offset+(size_t)j*4+4<=code.size();++j){size_t pos=offset+(size_t)j*4;uint32_t word=read_code_word(code,pos);uint32_t op=mips::bits(word,31,26),rt=mips::bits(word,20,16);
-                  if(op==mips::OP_BEQ){br_type="beq";br_dist=j;return true;}if(op==mips::OP_BNE){br_type="bne";br_dist=j;return true;}
-                  if(op==mips::OP_BLEZ){br_type="blez";br_dist=j;return true;}if(op==mips::OP_BGTZ){br_type="bgtz";br_dist=j;return true;}
-                  if(op==mips::OP_REGIMM){if(rt==mips::RT_BLTZ){br_type="bltz";br_dist=j;return true;}if(rt==mips::RT_BGEZ){br_type="bgez";br_dist=j;return true;}}
-                  if(op==mips::OP_COP1){uint32_t rs=mips::bits(word,25,21);if(rs==0x08){br_type=mips::bits(word,16,16)?"bc1t":"bc1f";br_dist=j;return true;}}}
-              return false; }
-          static inline ScanCandidate make_candidate(const std::string& pat,uint32_t addr,int32_t val,const std::string& dis,const std::string& bt,int bd,size_t wo,uint32_t pw,bool ap,const std::vector<uint8_t>& code){
-              ScanCandidate c;c.pattern=pat;c.address=addr;c.value=val;c.disasm=dis;c.branch_type=bt;c.word_offset=(uint32_t)wo;c.patch_word=pw;c.auto_patchable=ap;
-              if(wo+4<=code.size()){std::memcpy(c.orig_bytes.data(),code.data()+wo,4);if(ap){c.patch_bytes={(uint8_t)(pw&0xFF),(uint8_t)((pw>>8)&0xFF),(uint8_t)((pw>>16)&0xFF),(uint8_t)((pw>>24)&0xFF)};}}return c; }
-          void MipsPatternScanner::scan_pattern_1(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              for(size_t i=0;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);uint32_t op=mips::bits(word,31,26);
-                  if(op!=mips::OP_SLTI&&op!=mips::OP_SLTIU)continue;int32_t imm=mips::sign_extend_16(mips::bits(word,15,0));if(imm<min_val_||imm>max_val_)continue;
-                  std::string bt;int bd;if(!check_branch_within(code,i,4,bt,bd))continue;uint32_t rs=mips::bits(word,25,21),rt=mips::bits(word,20,16);
-                  BranchSafety bs=analyze_branch_safety(read_code_word(code,i+(size_t)bd*4),rt,ResultType::ZeroOrOne);if(!bs.tests_result_reg||bs.degenerate)continue;
-                  const char* nm=(op==mips::OP_SLTIU)?"sltiu":"slti";bool ap=bs.safe_to_max_imm;uint32_t patch=ap?(op<<26)|(rs<<21)|(rt<<16)|32767:0;
-                  char d[192];std::snprintf(d,sizeof(d),"%s $%u,$%u,%d|%s",nm,rt,rs,imm,bs.reason.c_str());
-                  out.push_back(make_candidate(std::string("P1-")+nm,text_addr+(uint32_t)i,imm,d,bt,bd,i,patch,ap,code));} }
-          void MipsPatternScanner::scan_pattern_2(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              if(code.size()<12)return;
-              for(size_t i=4;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);uint32_t op=mips::bits(word,31,26),funct=mips::bits(word,5,0);
-                  if(op!=mips::OP_SPECIAL||(funct!=mips::F_SUB&&funct!=mips::F_SUBU))continue;uint32_t rd=mips::bits(word,15,11);
-                  size_t pp=i-4;uint32_t pw=read_code_word(code,pp);if(mips::bits(pw,31,26)!=mips::OP_ADDIU)continue;
-                  int32_t pi=mips::sign_extend_16(mips::bits(pw,15,0));if(std::abs(pi)<min_val_||std::abs(pi)>max_val_)continue;
-                  if(i+8>code.size())continue;uint32_t nw=read_code_word(code,i+4);if(mips::bits(nw,31,26)!=mips::OP_REGIMM)continue;
-                  uint32_t nrt=mips::bits(nw,20,16),nrs=mips::bits(nw,25,21);if(nrt!=mips::RT_BLTZ&&nrt!=mips::RT_BGEZ)continue;if(nrs!=rd)continue;
-                  BranchSafety bs=analyze_branch_safety(nw,rd,ResultType::GeneralValue);if(!bs.tests_result_reg||bs.degenerate)continue;
-                  uint32_t prr=mips::bits(pw,20,16);const char* bn=(nrt==mips::RT_BLTZ)?"bltz":"bgez";bool ap=bs.safe_to_max_imm;
-                  uint32_t patch=ap?(mips::OP_ADDIU<<26)|(prr<<16)|32767:0;
-                  out.push_back(make_candidate(std::string("P2-")+(funct==mips::F_SUBU?"subu+":"sub+")+bn,text_addr+(uint32_t)pp,std::abs(pi),bn,bn,2,pp,patch,ap,code));} }
-          void MipsPatternScanner::scan_pattern_3(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              for(size_t i=0;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);if(mips::bits(word,31,26)!=mips::OP_ADDIU)continue;
-                  int32_t imm=mips::sign_extend_16(mips::bits(word,15,0));if(imm>=0||std::abs(imm)<min_val_||std::abs(imm)>max_val_)continue;
-                  uint32_t rt=mips::bits(word,20,16),rs=mips::bits(word,25,21);if(i+8>code.size())continue;
-                  uint32_t nw=read_code_word(code,i+4);if(mips::bits(nw,31,26)!=mips::OP_REGIMM)continue;
-                  uint32_t nrt=mips::bits(nw,20,16),nrs=mips::bits(nw,25,21);if(nrt!=mips::RT_BLTZ&&nrt!=mips::RT_BGEZ)continue;if(nrs!=rt)continue;
-                  BranchSafety bs=analyze_branch_safety(nw,rt,ResultType::GeneralValue);if(!bs.tests_result_reg||bs.degenerate)continue;
-                  const char* bn=(nrt==mips::RT_BLTZ)?"bltz":"bgez";bool ap=bs.safe_to_max_imm;
-                  uint32_t patch=ap?(mips::OP_ADDIU<<26)|(rs<<21)|(rt<<16)|((uint32_t)(-32767)&0xFFFF):0;
-                  out.push_back(make_candidate(std::string("P3-addiu+")+bn,text_addr+(uint32_t)i,std::abs(imm),bn,bn,1,i,patch,ap,code));} }
-          void MipsPatternScanner::scan_pattern_4(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              for(size_t i=0;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);if(mips::bits(word,31,26)!=mips::OP_COP1)continue;
-                  uint32_t fmt=mips::bits(word,25,21);if(fmt!=0x10)continue;uint32_t funct=mips::bits(word,5,0);
-                  if(funct!=0x3C&&funct!=0x3D&&funct!=0x3E&&funct!=0x3F)continue;
-                  std::string bt;int bd;if(!check_branch_within(code,i,3,bt,bd))continue;
-                  const char* cond=(funct==0x3C||funct==0x3D)?"c.lt.s":"c.le.s";char d[128];std::snprintf(d,sizeof(d),"%s;%s",cond,bt.c_str());
-                  out.push_back(make_candidate("P4-float",text_addr+(uint32_t)i,-1,d,bt,bd,i,0,false,code));} }
-          void MipsPatternScanner::scan_pattern_5(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              if(code.size()<12)return;
-              for(size_t i=0;i+12<=code.size();i+=4){uint32_t word=read_code_word(code,i);if(mips::bits(word,31,26)!=mips::OP_COP2)continue;
-                  uint32_t rs=mips::bits(word,25,21);if(rs!=0x00&&rs!=0x02)continue;
-                  for(int j=1;j<=3&&i+(size_t)j*4+4<=code.size();++j){size_t pos=i+(size_t)j*4;uint32_t chk=read_code_word(code,pos);
-                      if(mips::bits(chk,31,26)!=mips::OP_ANDI)continue;uint32_t ai=mips::bits(chk,15,0);if(ai==0)continue;
-                      std::string bt;int bd;if(!check_branch_within(code,pos,2,bt,bd))continue;
-                      char d[128];std::snprintf(d,sizeof(d),"cfc2;andi 0x%04X;%s",ai,bt.c_str());
-                      out.push_back(make_candidate("P5-GTE-flag",text_addr+(uint32_t)i,(int32_t)ai,d,bt,j+1,i,0,false,code));break;}} }
-          void MipsPatternScanner::scan_pattern_6(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              if(code.size()<12)return;
-              for(size_t i=4;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);if(mips::bits(word,31,26)!=mips::OP_SPECIAL)continue;
-                  if(mips::bits(word,5,0)!=mips::F_SLTU)continue;uint32_t rd=mips::bits(word,15,11);
-                  size_t pp=i-4;uint32_t pw=read_code_word(code,pp);if(mips::bits(pw,31,26)!=mips::OP_ADDIU)continue;
-                  int32_t pi=mips::sign_extend_16(mips::bits(pw,15,0));if(pi<min_val_||pi>max_val_)continue;
-                  std::string bt;int bd;if(!check_branch_within(code,i,2,bt,bd))continue;
-                  BranchSafety bs=analyze_branch_safety(read_code_word(code,i+(size_t)bd*4),rd,ResultType::ZeroOrOne);if(!bs.tests_result_reg||bs.degenerate)continue;
-                  uint32_t prr=mips::bits(pw,20,16);bool ap=bs.safe_to_max_imm;uint32_t patch=ap?(mips::OP_ADDIU<<26)|(prr<<16)|32767:0;
-                  out.push_back(make_candidate("P6-sltu-range",text_addr+(uint32_t)pp,pi,bt,bt,bd,pp,patch,ap,code));} }
-          std::vector<ScanCandidate> MipsPatternScanner::scan(const PsxExeInfo& exe) const {
-              auto t0=std::chrono::high_resolution_clock::now();stats_={};std::vector<ScanCandidate> all;
-              scan_pattern_1(exe.code,exe.text_addr,all);scan_pattern_2(exe.code,exe.text_addr,all);
-              scan_pattern_3(exe.code,exe.text_addr,all);scan_pattern_6(exe.code,exe.text_addr,all);
-              if(scan_floats_)scan_pattern_4(exe.code,exe.text_addr,all);scan_pattern_5(exe.code,exe.text_addr,all);
-              std::sort(all.begin(),all.end(),[](const ScanCandidate&a,const ScanCandidate&b){if(a.auto_patchable!=b.auto_patchable)return a.auto_patchable;int da=(a.value>0)?std::abs(a.value-200):9999;int db=(b.value>0)?std::abs(b.value-200):9999;return da<db;});
-              auto t1=std::chrono::high_resolution_clock::now();stats_.scan_time_us=(uint64_t)std::chrono::duration_cast<std::chrono::microseconds>(t1-t0).count();
-              stats_.total_candidates=(uint32_t)all.size();stats_.auto_patchable=(uint32_t)std::count_if(all.begin(),all.end(),[](const ScanCandidate&c){return c.auto_patchable;});
-              stats_.float_candidates=(uint32_t)std::count_if(all.begin(),all.end(),[](const ScanCandidate&c){return c.pattern=="P4-float";});
-              stats_.gte_candidates=(uint32_t)std::count_if(all.begin(),all.end(),[](const ScanCandidate&c){return c.pattern=="P5-GTE-flag";});
-              return all; }
-          PatchManifest MipsPatternScanner::to_manifest(const std::vector<ScanCandidate>& candidates,const ExecutableSignature& exe_sig,const std::string& display_name) const {
-              PatchManifest m;m.exe_signature=exe_sig;m.display_name=display_name+" (auto-discovered)";m.recommend_8mb_ram=false;int idx=0;
-              for(const auto& c:candidates){if(!c.auto_patchable)continue;if(++idx>30)break;PatchEntry pe;
-                  char nm[128];std::snprintf(nm,sizeof(nm),"candidate_%d_%s_addr_%08X",idx,c.pattern.c_str(),c.address);pe.name=nm;
-                  char dc[256];std::snprintf(dc,sizeof(dc),"%s|original_value=%d|maxed_to=32767",c.disasm.c_str(),c.value);pe.description=dc;
-                  char ph[32];std::snprintf(ph,sizeof(ph),"%02X %02X %02X %02X",c.orig_bytes[0],c.orig_bytes[1],c.orig_bytes[2],c.orig_bytes[3]);pe.pattern_hex=ph;
-                  char rh[32];std::snprintf(rh,sizeof(rh),"%02X %02X %02X %02X",c.patch_bytes[0],c.patch_bytes[1],c.patch_bytes[2],c.patch_bytes[3]);pe.replacement_hex=rh;
-                  pe.category=(c.value<500)?PatchEntry::Category::StreamingBudget:PatchEntry::Category::LodDistance;pe.requires_8mb=(c.value>200);if(pe.requires_8mb)m.recommend_8mb_ram=true;
-                  m.patches.push_back(std::move(pe));}
-              return m; }
-          }  // namespace rsil
-          '''
-          wr("rsil/src/MipsPatternScanner.cpp", mips)
-          print("D3: MipsPatternScanner.cpp written")
-
-          # === D10: json_escape in RSILSubsystem.cpp ===
-          f = rd("rsil/src/RSILSubsystem.cpp")
-          if "json_escape" not in f:
-              f = f.replace("namespace rsil {",
-                  'namespace {\nstd::string json_escape(const std::string& s) {\n    std::string out; out.reserve(s.size()+8);\n    for (char c : s) {\n        switch (c) {\n            case \'"\': out += "\\\\""; break;\n            case \'\\\\\': out += "\\\\\\\\"; break;\n            case \'\\n\': out += "\\\\n"; break;\n            default: out += c;\n        }\n    }\n    return out;\n}\n} // namespace\n\nnamespace rsil {', 1)
-              f = f.replace("<< manifest.display_name <<", "<< json_escape(manifest.display_name) <<")
-              f = f.replace("<< p.name <<", "<< json_escape(p.name) <<")
-              f = f.replace("<< p.description <<", "<< json_escape(p.description) <<")
-              f = f.replace("<< p.pattern_hex <<", "<< json_escape(p.pattern_hex) <<")
-              f = f.replace("<< p.replacement_hex <<", "<< json_escape(p.replacement_hex) <<")
-              wr("rsil/src/RSILSubsystem.cpp", f)
-              print("D10: json_escape added")
-
-          # === Fix set_emulation_mode to apply auto-discovered manifests ===
-          f = rd("rsil/src/RSILSubsystem.cpp")
-          if "Apply the manifest" not in f:
-              old = re.search(r'void RSILSubsystem::set_emulation_mode\(.*?^}', f, re.DOTALL|re.MULTILINE)
-              if old:
-                  new = '''void RSILSubsystem::set_emulation_mode(EmulationMode mode, RamAccess* ram, const std::filesystem::path& patches_dir) {
-              if (mode == mode_) return;
-              if (mode == EmulationMode::Enhanced) {
-                  if (!ram) return;
-                  ram_access_ = ram;
-                  if (!patches_dir.empty()) {
-                      auto mp = find_manifest_for_exe(patches_dir, exe_);
-                      if (!mp.empty()) epl_.load_manifest(mp);
-                  }
-                  // Apply the manifest
-                  if (epl_.has_manifest() && !epl_.is_applied()) {
-                      epl_.apply(*ram_access_);
-                  }
-                  mode_ = EmulationMode::Enhanced;
-              } else {
-                  if (epl_.is_applied() && ram_access_) epl_.revert(*ram_access_);
-                  ram_access_ = nullptr;
-                  mode_ = EmulationMode::Deterministic;
-              }
-          }'''
-                  f = f[:old.start()] + new + f[old.end():]
-                  wr("rsil/src/RSILSubsystem.cpp", f)
-                  print("set_emulation_mode fixed")
-
-          # === D12: desync watchdog in GpuPacketParser.cpp ===
-          f = rd("rsil/src/GpuPacketParser.cpp")
-          if "desync watchdog" not in f:
-              f = f.replace("stats_.words_consumed++;\n",
-                  "stats_.words_consumed++;\n    // D12 fix: desync watchdog\n    if (state_ == State::Accumulating && packet_words_.size() >= 16) {\n        stats_.desyncs++; state_ = State::Idle; packet_words_.clear(); words_expected_ = 0; pending_cmd_ = 0;\n    }\n", 1)
-              wr("rsil/src/GpuPacketParser.cpp", f)
-              print("D12: watchdog added")
-
-          # === D13: restore() in ClusterSignature.h + .cpp ===
-          h = rd("rsil/include/rsil/ClusterSignature.h")
-          if "void restore" not in h:
-              h = h.replace("std::vector<SignatureEntry> snapshot() const;",
-                  "std::vector<SignatureEntry> snapshot() const;\n    void restore(const std::vector<SignatureEntry>& entries);", 1)
-              wr("rsil/include/rsil/ClusterSignature.h", h)
-          c = rd("rsil/src/ClusterSignature.cpp")
-          if "SignatureRegistry::restore" not in c:
-              c = c.replace("void SignatureRegistry::clear() { entries_.clear(); }",
-                  "void SignatureRegistry::clear() { entries_.clear(); }\n\nvoid SignatureRegistry::restore(const std::vector<SignatureEntry>& entries) {\n    entries_.clear(); entries_.reserve(entries.size());\n    for (const auto& e : entries) { if (e.id == kInvalidSignature) continue; entries_.emplace(e.id, e); }\n}", 1)
-              wr("rsil/src/ClusterSignature.cpp", c)
-              print("D13: restore added")
-
-          # === Fix test_mips_scanner.cpp (bne → beq) ===
-          f = rd("rsil/tests/test_mips_scanner.cpp")
-          f = f.replace("uint32_t bne  = (0x05 << 26) | (8 << 21) | (0 << 16) | 4;",
-                        "uint32_t beq  = (0x04 << 26) | (8 << 21) | (0 << 16) | 4;")
-          f = f.replace("emit_word(code, bne);", "emit_word(code, beq);")
-          wr("rsil/tests/test_mips_scanner.cpp", f)
-
-          # === DuckStation hooks ===
-          DS = "duckstation"
-
-          # system.h
-          patch(f"{DS}/src/core/system.h", "bool IsReplayingGPUDump();",
-                "// RSIL\nnamespace rsil { class RSILSubsystem; }\nrsil::RSILSubsystem* GetRSIL();")
-
-          # system.cpp includes
-          patch(f"{DS}/src/core/system.cpp", '#include "gpu_dump.h"',
-                '// RSIL\n#include "rsil/RSILSubsystem.h"\n#include "rsil/Config.h"\n#include "duckstation/DuckStationHostAdapter.h"\n#include "gpu_dump.h"', after=False)
-          # s_state member
-          c = rd(f"{DS}/src/core/system.cpp")
-          if "std::unique_ptr<rsil::RSILSubsystem> rsil;" not in c:
-              c = c.replace("u32 frame_number = 0;", "u32 frame_number = 0;\n  std::unique_ptr<rsil::RSILSubsystem> rsil;", 1)
-              wr(f"{DS}/src/core/system.cpp", c)
-          # GetRSIL
-          patch(f"{DS}/src/core/system.cpp", "return s_state.frame_number;",
-                "return s_state.frame_number;\n}\n\nrsil::RSILSubsystem* System::GetRSIL()\n{\n  return s_state.rsil.get();")
-          # Initialize
-          patch(f"{DS}/src/core/system.cpp", "s_state.state = State::Running;",
-                's_state.state = State::Running;\n  // RSIL\n  if (!s_state.rsil) {\n    rsil::RSILConfig cfg = rsil::RSILConfig::defaults();\n    static rsil::DuckStationHostAdapter s_host;\n    s_state.rsil = rsil::RSILSubsystem::create(std::move(cfg), s_host, nullptr, nullptr);\n  }\n  if (s_state.rsil) {\n    s_state.rsil->set_scan_deferred(true);\n    GTE::SetRSILZScale(0.5f);\n    GTE::SetRSILZScaleActive(true);')
-          # DestroySystem
-          c = rd(f"{DS}/src/core/system.cpp")
-          if "s_state.rsil.reset()" not in c:
-              c = c.replace("void System::DestroySystem()\n{", "void System::DestroySystem()\n{\n  s_state.rsil.reset();", 1)
-              wr(f"{DS}/src/core/system.cpp", c)
-          # FrameDone with pump + scan + auto-activation
-          c = rd(f"{DS}/src/core/system.cpp")
-          if "RSIL: Auto-activate Enhanced mode" not in c:
-              c = c.replace("void System::FrameDone()\n{",
-                'void System::FrameDone()\n{\n  // RSIL: Auto-activate Enhanced mode after scan finds patches.\n  if (s_state.rsil) [[unlikely]]\n  {\n    s_state.rsil->Pump(s_state.frame_number);\n    if (s_state.rsil->scan_deferred() && Bus::g_ram && Bus::g_ram_size > 0)\n    {\n      if (Bus::g_ram_code_bits.any())\n      {\n        std::vector<u8> snap(Bus::g_ram, Bus::g_ram + std::min<u32>(Bus::g_ram_size, 0x200000));\n        s_state.rsil->auto_discover_patches(snap);\n        s_state.rsil->set_scan_deferred(false);\n        if (s_state.rsil->scan_stats().total_candidates > 0)\n        {\n          static rsil::DuckStationRamAccess s_ram;\n          s_state.rsil->set_emulation_mode(rsil::EmulationMode::Enhanced, &s_ram, "");\n        }\n      }\n    }\n  }', 1)
-              wr(f"{DS}/src/core/system.cpp", c)
-              print("system.cpp: FrameDone patched with Auto-activate Enhanced mode")
-
-          # gpu.cpp
-          patch(f"{DS}/src/core/gpu.cpp", '#include "video_thread_commands.h"',
-                '#include "video_thread_commands.h"\n// RSIL\n#include "rsil/RSILSubsystem.h"', after=False)
-          c = rd(f"{DS}/src/core/gpu.cpp")
-          if "RSIL: tap GP0" not in c:
-              c = c.replace("s_locals.fifo.Push(value);\n      ExecuteCommands();",
-                "s_locals.fifo.Push(value);\n      // RSIL: tap GP0\n      if (rsil::RSILSubsystem* rs = System::GetRSIL()) [[unlikely]]\n        rs->GetTap().emit_gpu_command(0, value, System::GetFrameNumber());\n      ExecuteCommands();", 1)
-              wr(f"{DS}/src/core/gpu.cpp", c)
-
-          # imgui_overlays.cpp
-          patch(f"{DS}/src/core/imgui_overlays.cpp", '#include "system.h"',
-                '#include "system.h"\n// RSIL\n#include "rsil/RSILSubsystem.h"', after=False)
-          c = rd(f"{DS}/src/core/imgui_overlays.cpp")
-          if "RSIL: draw overlay" not in c:
-              c = c.replace("void ImGuiManager::RenderDebugWindows()\n{",
-                "void ImGuiManager::RenderDebugWindows()\n{\n  // RSIL: draw overlay\n  if (System::IsValid() && System::GetRSIL())\n    System::GetRSIL()->DrawOverlay();", 1)
-              wr(f"{DS}/src/core/imgui_overlays.cpp", c)
-
-          # gte.h
-          patch(f"{DS}/src/core/gte.h", "} // namespace GTE",
-                "// RSIL: GTE Z-scale\nvoid SetRSILZScale(float scale);\nvoid SetRSILZScaleActive(bool active);", after=False)
-
-          # gte.cpp
-          c = rd(f"{DS}/src/core/gte.cpp")
-          if "SetRSILZScale" not in c:
-              c = c.replace("} // namespace GTE",
-                "// RSIL: GTE Z-scale\nstatic float s_rsil_zs = 1.0f; static bool s_rsil_zs_a = false;\nvoid GTE::SetRSILZScale(float s) { s_rsil_zs = s; }\nvoid GTE::SetRSILZScaleActive(bool a) { s_rsil_zs_a = a; }\n} // namespace GTE", 1)
-              wr(f"{DS}/src/core/gte.cpp", c)
-
-          print("=== ALL PATCHES APPLIED ===")
-
-          PYEND
+          mkdir -p duckstation/dep/rsil && cp -r rsil/* duckstation/dep/rsil/
+          python3 rsil-repo/patch_ds.py
           grep -q "Auto-activate Enhanced mode" duckstation/src/core/system.cpp && echo "Auto-activation: OK"
           grep -q "SetRSILZScale" duckstation/src/core/gte.cpp && echo "GTE Z-scale: OK"
           grep -q "tap GP0" duckstation/src/core/gpu.cpp && echo "GP0 tap: OK"
+          grep -q "rsil" duckstation/src/core/core.vcxproj && echo "core.vcxproj: OK"
 
-      - name: Copy RSIL + download deps
+      - name: Download deps
         shell: bash
         run: |
-          mkdir -p duckstation/dep/rsil && cp -r rsil/* duckstation/dep/rsil/
           curl -sL -o deps.7z "https://github.com/duckstation/dependencies/releases/download/$DEPS_TAG/deps-windows-x64.7z"
           mkdir -p duckstation/dep/prebuilt && 7z x deps.7z -oduckstation/dep/prebuilt -y
-
-      - name: Generate rsil.vcxproj + patch .sln + core.vcxproj
-        shell: bash
-        run: |
-          cat > duckstation/dep/rsil/rsil.vcxproj << 'XMLEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-            <Import Project="..\vsprops\Configurations.props" />
-            <ItemGroup>
-              <ClCompile Include="src\AdjacencyGraph.cpp" /><ClCompile Include="src\ClusterSignature.cpp" />
-              <ClCompile Include="src\DebugOverlay.cpp" /><ClCompile Include="src\GpuPacketParser.cpp" />
-              <ClCompile Include="src\HeadlessPrePass.cpp" /><ClCompile Include="src\HostPreRegistrar.cpp" />
-              <ClCompile Include="src\MipsPatternScanner.cpp" /><ClCompile Include="src\Persistence.cpp" />
-              <ClCompile Include="src\Predictor.cpp" /><ClCompile Include="src\RSILSubsystem.cpp" />
-              <ClCompile Include="src\ScenePatchLayer.cpp" /><ClCompile Include="src\SpatialCatalog.cpp" />
-              <ClCompile Include="src\TelemetryTap.cpp" /><ClCompile Include="src\Validator.cpp" />
-              <ClCompile Include="integration\duckstation\DuckStationHostAdapter.cpp" />
-              <ClCompile Include="integration\duckstation\DuckStationHashProvider.cpp" />
-            </ItemGroup>
-            <PropertyGroup Label="Globals"><ProjectGuid>${{ env.RSIL_GUID }}</ProjectGuid></PropertyGroup>
-            <Import Project="..\vsprops\StaticLibrary.props" />
-            <ItemDefinitionGroup><ClCompile>
-              <AdditionalIncludeDirectories>$(ProjectDir)\include;$(SolutionDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-              <PreprocessorDefinitions>RSIL_DUCKSTATION_INTEGRATED;RSIL_HAS_SQLITE=1;RSIL_HAS_IMGUI=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-              <LanguageStandard>stdcpp20</LanguageStandard><ConformanceMode>false</ConformanceMode>
-              <DisableSpecificWarnings>4244;4267;4146;4458;4324</DisableSpecificWarnings>
-            </ClCompile></ItemDefinitionGroup>
-            <Import Project="..\vsprops\Targets.props" />
-          </Project>
-          XMLEOF
-          python3 << 'PYEND'
-          import re, os
-          guid = os.environ.get("RSIL_GUID", "")
-          # Patch .sln — add rsil project with ALL config mappings
-          with open("duckstation/duckstation.sln","r") as f: sln = f.read()
-          if "rsil.vcxproj" not in sln:
-          pe = '\nProject("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rsil", "dep\rsil\rsil.vcxproj", "' + guid + '"\nEndProject\n'
-          sln = re.sub(r'(Project\([^}]+\{BA490C0E[^}]+\}[^)]*\)[^\n]*\nEndProject)', lambda m: m.group(1) + pe, sln)
-          # Build cfg for ALL solution configurations
-          cfg = ""
-          for c in ["Debug|ARM64","Debug|x64","Debug-Clang|ARM64","Debug-Clang|x64","Debug-Clang-SSE2|ARM64","Debug-Clang-SSE2|x64","DebugFast|ARM64","DebugFast|x64","DebugFast-Clang|ARM64","DebugFast-Clang|x64","Devel-Clang|ARM64","Devel-Clang|x64","Release|ARM64","Release|x64","Release-Clang|ARM64","Release-Clang|x64","ReleaseLTCG|ARM64","ReleaseLTCG|x64","ReleaseLTCG-Clang|ARM64","ReleaseLTCG-Clang|x64"]:
-          config, plat = c.split("|")
-          target = "Debug|x64" if ("Debug" in config or "Devel" in config) else "Release|x64"
-          cfg += "\t" + guid + "." + c + ".ActiveCfg = " + target + "\n"
-          if plat == "x64":
-            cfg += "\t" + guid + "." + c + ".Build.0 = " + target + "\n"
-          sln = re.sub(r"(GlobalSection\(ProjectConfigurationPlatforms\)[^\n]*\n)", lambda m: m.group(1) + cfg, sln)
-          with open("duckstation/duckstation.sln","w") as f: f.write(sln)
-          print(".sln patched")
-          # Patch core.vcxproj — add RSIL include path + ProjectReference
-          with open("duckstation/src/core/core.vcxproj","r") as f: p = f.read()
-          if "rsil" not in p:
-          p = p.replace("dep\fast_float\include;", "dep\fast_float\include;$(SolutionDir)dep\rsil\include;")
-          p = p.replace("</ProjectReference>", '</ProjectReference>\n    <ProjectReference Include="..\..\dep\rsil\rsil.vcxproj"></ProjectReference>', 1)
-          with open("duckstation/src/core/core.vcxproj","w") as f: f.write(p)
-          print("core.vcxproj patched")
-          PYEND
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -416,7 +68,7 @@ jobs:
           for c in "duckstation/build/Release-x64/bin" "duckstation/bin/Release" "duckstation/bin"; do
             [ -f "$c/duckstation-qt.exe" ] && BIN="$c" && break
           done
-          [ -z "$BIN" ] && BIN=$(find duckstation -name "duckstation-qt.exe" -printf '%h' -quit)
+          [ -z "$BIN" ] && BIN=$(find duckstation -name "duckstation-qt.exe" -printf '%h' -quit 2>/dev/null)
           [ -z "$BIN" ] && echo "ERROR: exe not found" && exit 1
           cp "$BIN"/*.exe "$PKG/" 2>/dev/null; cp "$BIN"/*.dll "$PKG/" 2>/dev/null
           WDQ=$(find "$BIN" duckstation/dep/prebuilt -name "windeployqt.exe" -print -quit 2>/dev/null)
