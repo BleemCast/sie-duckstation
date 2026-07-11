@@ -27,8 +27,8 @@ def patch(path, anchor, ins, after=True):
     print("  OK: " + os.path.basename(path))
 
 # system.h
-patch(DS + "/src/core/system.h", "bool IsReplayingGPUDump();",
-      "// RSIL\nnamespace rsil { class RSILSubsystem; }\nrsil::RSILSubsystem* GetRSIL();")
+patch(DS + "/src/core/system.h", "} // namespace System",
+      "// RSIL forward decl (outside namespace System)\nnamespace rsil { class RSILSubsystem; }\n::::rsil::RSILSubsystem* System::GetRSIL();")
 
 # system.cpp includes
 patch(DS + "/src/core/system.cpp", '#include "gpu_dump.h"',
@@ -43,11 +43,11 @@ if "std::unique_ptr<::rsil::RSILSubsystem> rsil;" not in c:
 
 # GetRSIL
 patch(DS + "/src/core/system.cpp", "return s_state.frame_number;",
-      "return s_state.frame_number;\n}\n\nrsil::RSILSubsystem* System::GetRSIL()\n{\n  return s_state.rsil.get(); // returns ::rsil::RSILSubsystem*")
+      "return s_state.frame_number;\n}\n\n::rsil::RSILSubsystem* System::GetRSIL()\n{\n  return s_state.rsil.get(); // returns ::rsil::RSILSubsystem*")
 
 # Initialize
 patch(DS + "/src/core/system.cpp", "s_state.state = State::Running;",
-      "s_state.state = State::Running;\n  // RSIL\n  if (!s_state.rsil) {\n    rsil::RSILConfig cfg = rsil::RSILConfig::defaults();\n    static rsil::DuckStationHostAdapter s_host;\n    s_state.rsil = rsil::RSILSubsystem::create(std::move(cfg), s_host, nullptr, nullptr);\n  }\n  if (s_state.rsil) {\n    s_state.rsil->set_scan_deferred(true);\n    GTE::SetRSILZScale(0.5f);\n    GTE::SetRSILZScaleActive(true);")
+      "s_state.state = State::Running;\n  // RSIL\n  if (!s_state.rsil) {\n    ::rsil::RSILConfig cfg = rsil::RSILConfig::defaults();\n    static ::rsil::DuckStationHostAdapter s_host;\n    s_state.rsil = ::rsil::RSILSubsystem::create(std::move(cfg), s_host, nullptr, nullptr);\n  }\n  if (s_state.rsil) {\n    s_state.rsil->set_scan_deferred(true);\n    GTE::SetRSILZScale(0.5f);\n    GTE::SetRSILZScaleActive(true);")
 
 # DestroySystem
 c = rd(DS + "/src/core/system.cpp")
@@ -60,7 +60,7 @@ if "s_state.rsil.reset()" not in c:
 c = rd(DS + "/src/core/system.cpp")
 if "Auto-activate Enhanced mode" not in c:
     c = c.replace("void System::FrameDone()\n{",
-      'void System::FrameDone()\n{\n  // RSIL: Auto-activate Enhanced mode after scan finds patches.\n  if (s_state.rsil) [[unlikely]]\n  {\n    s_state.rsil->Pump(s_state.frame_number);\n    if (s_state.rsil->scan_deferred() && Bus::g_ram && Bus::g_ram_size > 0)\n    {\n      if (Bus::g_ram_code_bits.any())\n      {\n        std::vector<u8> snap(Bus::g_ram, Bus::g_ram + std::min<u32>(Bus::g_ram_size, 0x200000));\n        s_state.rsil->auto_discover_patches(snap);\n        s_state.rsil->set_scan_deferred(false);\n        if (s_state.rsil->scan_stats().total_candidates > 0)\n        {\n          static rsil::DuckStationRamAccess s_ram;\n          s_state.rsil->set_emulation_mode(rsil::EmulationMode::Enhanced, &s_ram, "");\n        }\n      }\n    }\n  }', 1)
+      'void System::FrameDone()\n{\n  // RSIL: Auto-activate Enhanced mode after scan finds patches.\n  if (s_state.rsil) [[unlikely]]\n  {\n    s_state.rsil->Pump(s_state.frame_number);\n    if (s_state.rsil->scan_deferred() && Bus::g_ram && Bus::g_ram_size > 0)\n    {\n      if (Bus::g_ram_code_bits.any())\n      {\n        std::vector<u8> snap(Bus::g_ram, Bus::g_ram + std::min<u32>(Bus::g_ram_size, 0x200000));\n        s_state.rsil->auto_discover_patches(snap);\n        s_state.rsil->set_scan_deferred(false);\n        if (s_state.rsil->scan_stats().total_candidates > 0)\n        {\n          static ::rsil::DuckStationRamAccess s_ram;\n          s_state.rsil->set_emulation_mode(::rsil::EmulationMode::Enhanced, &s_ram, "");\n        }\n      }\n    }\n  }', 1)
     wr(DS + "/src/core/system.cpp", c)
     print("  OK: FrameDone")
 
@@ -70,7 +70,7 @@ patch(DS + "/src/core/gpu.cpp", '#include "video_thread_commands.h"',
 c = rd(DS + "/src/core/gpu.cpp")
 if "RSIL: tap GP0" not in c:
     c = c.replace("s_locals.fifo.Push(value);\n      ExecuteCommands();",
-      "s_locals.fifo.Push(value);\n      // RSIL: tap GP0\n      if (rsil::RSILSubsystem* rs = System::GetRSIL()) [[unlikely]]\n        rs->GetTap().emit_gpu_command(0, value, System::GetFrameNumber());\n      ExecuteCommands();", 1)
+      "s_locals.fifo.Push(value);\n      // RSIL: tap GP0\n      if (::rsil::RSILSubsystem* rs = System::GetRSIL()) [[unlikely]]\n        rs->GetTap().emit_gpu_command(0, value, System::GetFrameNumber());\n      ExecuteCommands();", 1)
     wr(DS + "/src/core/gpu.cpp", c)
     print("  OK: GP0 tap")
 
