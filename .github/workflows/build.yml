@@ -1,438 +1,62 @@
-name: Build RSIL-DuckStation (Self-Contained)
-
-# ONE FILE. Paste as .github/workflows/build.yml. Push to main. Done.
-# Contains ALL RSIL source (base64-embedded), ALL fixes, ALL hooks.
-# Works on an EMPTY repo. Build time: ~40 min.
+name: Build SIE
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main, master]
-
-env:
-  DUCKSTATION_REF: "v0.1-11515"
-  DEPS_TAG: "release-20260614"
-  RSIL_GUID: "{B5E8D2F1-3A4C-4E6F-9B7A-1C2D3E4F5A6B}"
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-2022
-    timeout-minutes: 90
     steps:
-      - name: Checkout RSIL repo (for rsil-source.tar)
-        uses: actions/checkout@v4
-        with:
-          path: rsil-repo
+      - name: Clone DuckStation
+        run: git clone --depth 1 https://github.com/stenzek/DuckStation.git
+        shell: cmd
 
-      - name: Checkout DuckStation
-        uses: actions/checkout@v4
-        with:
-          repository: stenzek/duckstation
-          ref: ${{ env.DUCKSTATION_REF }}
-          path: duckstation
-
-      - name: Extract RSIL + patch DuckStation
-        shell: bash
+      - name: Create patch
+        shell: python
         run: |
-          set -e
-          # RSIL source is stored as rsil-source.tar in the repo
-          cp rsil-repo/rsil-source.tar rsil.tar
-          mkdir -p rsil && tar xf rsil.tar -C rsil && rm rsil.tar
-          echo "RSIL: $(find rsil -name '*.cpp' -o -name '*.h' | wc -l) files"
-          grep -q "analyze_branch_safety" rsil/src/MipsPatternScanner.cpp && echo "D3: OK" || exit 1
-          grep -q "json_escape" rsil/src/RSILSubsystem.cpp && echo "D10: OK" || exit 1
-          grep -q "desync watchdog" rsil/src/GpuPacketParser.cpp && echo "D12: OK" || exit 1
-          grep -q "SignatureRegistry::restore" rsil/src/ClusterSignature.cpp && echo "D13: OK" || exit 1
-          echo "=== Patching DuckStation ==="
-          python3 << 'PYEND'
-          import os, re
+          import base64
+          data = base64.b64decode("ZGlmZiAtLWdpdCBhL3NyYy9jb3JlL2NvcmUudmN4cHJvaiBiL3NyYy9jb3JlL2NvcmUudmN4cHJvagppbmRleCA1ZGE4NmI3Li5lNWQxNGQxIDEwMDY0NAotLS0gYS9zcmMvY29yZS9jb3JlLnZjeHByb2oKKysrIGIvc3JjL2NvcmUvY29yZS52Y3hwcm9qCkBAIC01MCw2ICs1MCw3IEBACiAgICAgPENsQ29tcGlsZSBJbmNsdWRlPSJncHVfc3dfcmFzdGVyaXplci5jcHAiIC8+CiAgICAgPENsQ29tcGlsZSBJbmNsdWRlPSJ2aWRlb190aHJlYWQuY3BwIiAvPgogICAgIDxDbENvbXBpbGUgSW5jbHVkZT0iZ3RlLmNwcCIgLz4KKyAgICA8Q2xDb21waWxlIEluY2x1ZGU9Ii4uXHNpc2Vcc2llLmNwcCIgLz4KICAgICA8Q2xDb21waWxlIEluY2x1ZGU9ImRtYS5jcHAiIC8+CiAgICAgPENsQ29tcGlsZSBJbmNsdWRlPSJncHUuY3BwIiAvPgogICAgIDxDbENvbXBpbGUgSW5jbHVkZT0iZ3B1X2h3LmNwcCIgLz4KQEAgLTE0MCw2ICsxNDEsNyBAQAogICAgIDxDbEluY2x1ZGUgSW5jbHVkZT0idmlkZW9fdGhyZWFkX2NvbW1hbmRzLmgiIC8+CiAgICAgPENsSW5jbHVkZSBJbmNsdWRlPSJncHVfdHlwZXMuaCIgLz4KICAgICA8Q2xJbmNsdWRlIEluY2x1ZGU9Imd0ZS5oIiAvPgorICAgIDxDbEluY2x1ZGUgSW5jbHVkZT0iLi5cc2lzZVxzaWUuaCIgLz4KICAgICA8Q2xJbmNsdWRlIEluY2x1ZGU9ImNwdV90eXBlcy5oIiAvPgogICAgIDxDbEluY2x1ZGUgSW5jbHVkZT0iZG1hLmgiIC8+CiAgICAgPENsSW5jbHVkZSBJbmNsdWRlPSJncHUuaCIgLz4KQEAgLTIxNyw4ICsyMTksOSBAQAogICA8SW1wb3J0IFByb2plY3Q9ImNvcmUucHJvcHMiIC8+CiAgIDxJdGVtRGVmaW5pdGlvbkdyb3VwPgogICAgIDxDbENvbXBpbGU+CisgICAgICA8UHJlcHJvY2Vzc29yRGVmaW5pdGlvbnM+V0lUSF9TSVNFOyUoUHJlcHJvY2Vzc29yRGVmaW5pdGlvbnMpPC9QcmVwcm9jZXNzb3JEZWZpbml0aW9ucz4KICAgICAgIDxQcmVwcm9jZXNzb3JEZWZpbml0aW9ucyBDb25kaXRpb249IickKFBsYXRmb3JtKSc9PSd4NjQnIEFuZCAoJChDb25maWd1cmF0aW9uLkNvbnRhaW5zKCdEZWJ1ZycpKSBPciAkKENvbmZpZ3VyYXRpb24uQ29udGFpbnMoJ0RldmVsJykpKSI+WllESVNfRElTQUJMRV9FTkNPREVSO1pZRElTX0RJU0FCTEVfQVZYNTEyO1pZRElTX0RJU0FCTEVfS05DO1pZRElTX1NUQVRJQ19CVUlMRDtaWUNPUkVfU1RBVElDX0JVSUxEOyUoUHJlcHJvY2Vzc29yRGVmaW5pdGlvbnMpPC9QcmVwcm9jZXNzb3JEZWZpbml0aW9ucz4KLSAgICAgIDxBZGRpdGlvbmFsSW5jbHVkZURpcmVjdG9yaWVzPiUoQWRkaXRpb25hbEluY2x1ZGVEaXJlY3Rvcmllcyk7JChTb2x1dGlvbkRpcilkZXBcZmFzdF9mbG9hdFxpbmNsdWRlOzwvQWRkaXRpb25hbEluY2x1ZGVEaXJlY3Rvcmllcz4KKyAgICAgIDxBZGRpdGlvbmFsSW5jbHVkZURpcmVjdG9yaWVzPiUoQWRkaXRpb25hbEluY2x1ZGVEaXJlY3Rvcmllcyk7JChTb2x1dGlvbkRpcilkZXBcZmFzdF9mbG9hdFxpbmNsdWRlOyQoU29sdXRpb25EaXIpc3JjOzwvQWRkaXRpb25hbEluY2x1ZGVEaXJlY3Rvcmllcz4KICAgICAgIDxBZGRpdGlvbmFsSW5jbHVkZURpcmVjdG9yaWVzIENvbmRpdGlvbj0iJyQoUGxhdGZvcm0pJz09J3g2NCcgQW5kICgkKENvbmZpZ3VyYXRpb24uQ29udGFpbnMoJ0RlYnVnJykpIE9yICQoQ29uZmlndXJhdGlvbi5Db250YWlucygnRGV2ZWwnKSkpIj4lKEFkZGl0aW9uYWxJbmNsdWRlRGlyZWN0b3JpZXMpOyQoU29sdXRpb25EaXIpZGVwXHp5ZGlzXGluY2x1ZGU7JChTb2x1dGlvbkRpcilkZXBcenlkaXNcZGVwZW5kZW5jaWVzXHp5Y29yZVxpbmNsdWRlPC9BZGRpdGlvbmFsSW5jbHVkZURpcmVjdG9yaWVzPgogICAgICAgPE9iamVjdEZpbGVOYW1lPiQoSW50RGlyKS8lKFJlbGF0aXZlRGlyKS88L09iamVjdEZpbGVOYW1lPgogICAgICAgPFByZWNvbXBpbGVkSGVhZGVyPlVzZTwvUHJlY29tcGlsZWRIZWFkZXI+CmRpZmYgLS1naXQgYS9zcmMvY29yZS9jcHVfY29yZS5jcHAgYi9zcmMvY29yZS9jcHVfY29yZS5jcHAKaW5kZXggZDU2YjRjNS4uYzZjNWFhYSAxMDA2NDQKLS0tIGEvc3JjL2NvcmUvY3B1X2NvcmUuY3BwCisrKyBiL3NyYy9jb3JlL2NwdV9jb3JlLmNwcApAQCAtOCw2ICs4LDkgQEAKICNpbmNsdWRlICJjcHVfZGlzYXNtLmgiCiAjaW5jbHVkZSAiY3B1X3BneHAuaCIKICNpbmNsdWRlICJndGUuaCIKKyNpZmRlZiBXSVRIX1NJU0UKKyNpbmNsdWRlICJzaXNlL3NpZS5oIgorI2VuZGlmCiAjaW5jbHVkZSAiaG9zdC5oIgogI2luY2x1ZGUgInBjZHJ2LmgiCiAjaW5jbHVkZSAicGlvLmgiCkBAIC0xOTQ5LDEwICsxOTUyLDI4IEBAIHJlc3RhcnRfaW5zdHJ1Y3Rpb246CiAgICAgICAgICAgICBTdGFsbFVudGlsR1RFQ29tcGxldGUoKTsKIAogICAgICAgICAgICAgY29uc3QgdTMyIHZhbHVlID0gR1RFOjpSZWFkUmVnaXN0ZXIoc3RhdGljX2Nhc3Q8dTMyPihpbnN0LnIucmQuR2V0VmFsdWUoKSkpOwotICAgICAgICAgICAgV3JpdGVSZWdEZWxheWVkKGluc3Quci5ydCwgdmFsdWUpOworICAgICAgICAgICAgdTMyIHNjYWxlZF92YWx1ZSA9IHZhbHVlOworCisjaWZkZWYgV0lUSF9TSVNFCisgICAgICAgICAgICAvLyBTSUUgWi1zY2FsaW5nOiBzY2FsZSBTWi9PVFogZm9yIHRoZSBnYW1lJ3MgY3VsbGluZyBkZWNpc2lvbi4KKyAgICAgICAgICAgIC8vIFBHWFAgZ2V0cyB0aGUgT1JJR0lOQUwgdmFsdWUgc28gaXRzIHByZWNpc2lvbiB0cmFja2luZyBpcyB1bmFmZmVjdGVkLgorICAgICAgICAgICAgaWYgKFNJRTo6Z19lbmFibGVkICYmIFNJRTo6Z196X3NjYWxlID4gMSkgeworICAgICAgICAgICAgICBjb25zdCB1MzIgaWR4ID0gc3RhdGljX2Nhc3Q8dTMyPihpbnN0LnIucmQuR2V0VmFsdWUoKSk7CisgICAgICAgICAgICAgIGlmIChpZHggPT0gNyB8fCAoaWR4ID49IDE2ICYmIGlkeCA8PSAxOSkpIHsgIC8vIE9UWiBvciBTWjAtU1ozCisgICAgICAgICAgICAgICAgdTE2IHogPSBzdGF0aWNfY2FzdDx1MTY+KHZhbHVlICYgMHhGRkZGKTsKKyAgICAgICAgICAgICAgICBpZiAoeiA+IDEwKSB7CisgICAgICAgICAgICAgICAgICB6ID0gc3RhdGljX2Nhc3Q8dTE2Pih6IC8gU0lFOjpnX3pfc2NhbGUpOworICAgICAgICAgICAgICAgICAgaWYgKHogPCAxKSB6ID0gMTsKKyAgICAgICAgICAgICAgICB9CisgICAgICAgICAgICAgICAgc2NhbGVkX3ZhbHVlID0gKHZhbHVlICYgMHhGRkZGMDAwMCkgfCB6OworICAgICAgICAgICAgICB9CisgICAgICAgICAgICB9CisjZW5kaWYKKworICAgICAgICAgICAgV3JpdGVSZWdEZWxheWVkKGluc3Quci5ydCwgc2NhbGVkX3ZhbHVlKTsKIAogICAgICAgICAgICAgaWYgY29uc3RleHByIChwZ3hwX21vZGUgPj0gUEdYUE1vZGU6Ok1lbW9yeSkKLSAgICAgICAgICAgICAgUEdYUDo6Q1BVX01GQzIoaW5zdCwgdmFsdWUpOworICAgICAgICAgICAgICBQR1hQOjpDUFVfTUZDMihpbnN0LCB2YWx1ZSk7ICAvLyBQR1hQIGdldHMgT1JJR0lOQUwgdmFsdWUKICAgICAgICAgICB9CiAgICAgICAgICAgYnJlYWs7CiAKQEAgLTIwMzAsMTEgKzIwNTEsMjkgQEAgcmVzdGFydF9pbnN0cnVjdGlvbjoKICAgICAgICAgTWVtb3J5QnJlYWtwb2ludENoZWNrPE1lbW9yeUFjY2Vzc1R5cGU6OldyaXRlPihhZGRyKTsKICAgICAgIH0KIAotICAgICAgY29uc3QgdTMyIHZhbHVlID0gR1RFOjpSZWFkUmVnaXN0ZXIoWmVyb0V4dGVuZDMyKHN0YXRpY19jYXN0PHU4PihpbnN0LmkucnQuR2V0VmFsdWUoKSkpKTsKKyAgICAgIGNvbnN0IHUzMiBvcmlnX3ZhbHVlID0gR1RFOjpSZWFkUmVnaXN0ZXIoWmVyb0V4dGVuZDMyKHN0YXRpY19jYXN0PHU4PihpbnN0LmkucnQuR2V0VmFsdWUoKSkpKTsKKyAgICAgIHUzMiB2YWx1ZSA9IG9yaWdfdmFsdWU7CisKKyNpZmRlZiBXSVRIX1NJU0UKKyAgICAgIC8vIFNJRSBaLXNjYWxpbmcgZm9yIHN3YzI6IGlmIHN0b3JpbmcgU1ovT1RaIHRvIG1lbW9yeSAodmVydGV4IHBhY2tldCksCisgICAgICAvLyBzY2FsZSB0aGUgZGVwdGggc28gdGhlIGdhbWUncyBsYXRlciBsdyArIGN1bGxpbmcgY29tcGFyaXNvbiBzZWVzIGEgc21hbGxlciBaLgorICAgICAgaWYgKFNJRTo6Z19lbmFibGVkICYmIFNJRTo6Z196X3NjYWxlID4gMSkgeworICAgICAgICBjb25zdCB1MzIgaWR4ID0gWmVyb0V4dGVuZDMyKHN0YXRpY19jYXN0PHU4PihpbnN0LmkucnQuR2V0VmFsdWUoKSkpOworICAgICAgICBpZiAoaWR4ID09IDcgfHwgKGlkeCA+PSAxNiAmJiBpZHggPD0gMTkpKSB7ICAvLyBPVFogb3IgU1owLVNaMworICAgICAgICAgIHUxNiB6ID0gc3RhdGljX2Nhc3Q8dTE2PihvcmlnX3ZhbHVlICYgMHhGRkZGKTsKKyAgICAgICAgICBpZiAoeiA+IDEwKSB7CisgICAgICAgICAgICB6ID0gc3RhdGljX2Nhc3Q8dTE2Pih6IC8gU0lFOjpnX3pfc2NhbGUpOworICAgICAgICAgICAgaWYgKHogPCAxKSB6ID0gMTsKKyAgICAgICAgICB9CisgICAgICAgICAgdmFsdWUgPSAob3JpZ192YWx1ZSAmIDB4RkZGRjAwMDApIHwgejsKKyAgICAgICAgfQorICAgICAgfQorI2VuZGlmCisKICAgICAgIFdyaXRlTWVtb3J5V29yZChhZGRyLCB2YWx1ZSk7CiAKICAgICAgIGlmIGNvbnN0ZXhwciAocGd4cF9tb2RlID49IFBHWFBNb2RlOjpNZW1vcnkpCi0gICAgICAgIFBHWFA6OkNQVV9TV0MyKGluc3QsIGFkZHIsIHZhbHVlKTsKKyAgICAgICAgUEdYUDo6Q1BVX1NXQzIoaW5zdCwgYWRkciwgb3JpZ192YWx1ZSk7ICAvLyBQR1hQIGdldHMgT1JJR0lOQUwgdmFsdWUKICAgICB9CiAgICAgYnJlYWs7CiAKZGlmZiAtLWdpdCBhL3NyYy9jb3JlL2dwdS5jcHAgYi9zcmMvY29yZS9ncHUuY3BwCmluZGV4IGQwZGNiZmQuLmYxNmM1M2UgMTAwNjQ0Ci0tLSBhL3NyYy9jb3JlL2dwdS5jcHAKKysrIGIvc3JjL2NvcmUvZ3B1LmNwcApAQCAtMTEsNiArMTEsNyBAQAogI2luY2x1ZGUgImdwdV9oZWxwZXJzLmgiCiAjaW5jbHVkZSAiZ3B1X2h3X3RleHR1cmVfY2FjaGUuaCIKICNpbmNsdWRlICJncHVfc3dfcmFzdGVyaXplci5oIgorI2luY2x1ZGUgImd0ZS5oIgogI2luY2x1ZGUgImhvc3QuaCIKICNpbmNsdWRlICJpbnRlcnJ1cHRfY29udHJvbGxlci5oIgogI2luY2x1ZGUgInBlcmZvcm1hbmNlX2NvdW50ZXJzLmgiCkBAIC0yMyw2ICsyNCw4IEBACiAjaW5jbHVkZSAidmlkZW9fdGhyZWFkLmgiCiAjaW5jbHVkZSAidmlkZW9fdGhyZWFkX2NvbW1hbmRzLmgiCiAKKyNpbmNsdWRlICJzaXNlL3NpZS5oIgorCiAjaW5jbHVkZSAidXRpbC9ncHVfZGV2aWNlLmgiCiAjaW5jbHVkZSAidXRpbC9pbWFnZS5oIgogI2luY2x1ZGUgInV0aWwvaW1ndWlfbWFuYWdlci5oIgpAQCAtNDEyLDYgKzQxNSwxMCBAQCB2b2lkIEdQVTo6SW5pdGlhbGl6ZSgpCiAgIHNfbG9jYWxzLnRleHR1cmVfZW5hYmxlX21hc2sgPSAhZ19zZXR0aW5ncy5ncHVfZGlzYWJsZV90ZXh0dXJlczsKICAgc19sb2NhbHMuZm9yY2VfcmF3X3RleHR1cmUgPSBnX3NldHRpbmdzLmdwdV9kaXNhYmxlX3ZlcnRleF9saWdodGluZzsKICAgVXBkYXRlQ1JUQ0NvbmZpZygpOworCisjaWZkZWYgV0lUSF9TSVNFCisgIFNJRTo6U0lFRW5naW5lOjpHZXQoKS5Jbml0aWFsaXplKCk7CisjZW5kaWYKIH0KIAogdm9pZCBHUFU6OlNodXRkb3duKCkKQEAgLTQyMSw2ICs0MjgsMTAgQEAgdm9pZCBHUFU6OlNodXRkb3duKCkKICAgc19sb2NhbHMuZnJhbWVfZG9uZV9ldmVudC5EZWFjdGl2YXRlKCk7CiAKICAgU3RvcFJlY29yZGluZ0dQVUR1bXAoKTsKKworI2lmZGVmIFdJVEhfU0lTRQorICBTSUU6OlNJRUVuZ2luZTo6R2V0KCkuU2h1dGRvd24oKTsKKyNlbmRpZgogfQogCiB2b2lkIEdQVTo6VXBkYXRlU2V0dGluZ3MoY29uc3QgU2V0dGluZ3MmIG9sZF9zZXR0aW5ncykKZGlmZiAtLWdpdCBhL3NyYy9jb3JlL2d0ZS5oIGIvc3JjL2NvcmUvZ3RlLmgKaW5kZXggY2U5MDkyMC4uZTI1NTYxZiAxMDA2NDQKLS0tIGEvc3JjL2NvcmUvZ3RlLmgKKysrIGIvc3JjL2NvcmUvZ3RlLmgKQEAgLTM2LDMgKzM2LDggQEAgdm9pZCBVcGRhdGVGcmVlY2FtKHU2NCBjdXJyZW50X3RpbWUpOwogdm9pZCBSZXNldEZyZWVjYW0oKTsKIAogfSAvLyBuYW1lc3BhY2UgR1RFCisKKy8vIFNJRSB0YXA6IHN0YXNoZXMgR1RFIHJlZ2lzdGVyIHN0YXRlIGFmdGVyIFJUUFMvUlRQVCBmb3Igd29ybGQtc3BhY2UgcmVjb3ZlcnkuCisjaWZkZWYgV0lUSF9TSVNFCitleHRlcm4gIkMiIHZvaWQgU0lFX0NhcHR1cmVHVEUoKTsKKyNlbmRpZgpkaWZmIC0tZ2l0IGEvc3JjL2NvcmUvaW1ndWlfb3ZlcmxheXMuY3BwIGIvc3JjL2NvcmUvaW1ndWlfb3ZlcmxheXMuY3BwCmluZGV4IGRmM2JjODcuLjYzNjY3MmIgMTAwNjQ0Ci0tLSBhL3NyYy9jb3JlL2ltZ3VpX292ZXJsYXlzLmNwcAorKysgYi9zcmMvY29yZS9pbWd1aV9vdmVybGF5cy5jcHAKQEAgLTI4LDYgKzI4LDcgQEAKICNpbmNsdWRlICJ1dGlsL2lucHV0X21hbmFnZXIuaCIKICNpbmNsdWRlICJ1dGlsL21lZGlhX2NhcHR1cmUuaCIKICNpbmNsdWRlICJ1dGlsL3RyYW5zbGF0aW9uLmgiCisjaW5jbHVkZSAic2lzZS9zaWUuaCIKIAogI2luY2x1ZGUgImNvbW1vbi9hbGlnbi5oIgogI2luY2x1ZGUgImNvbW1vbi9hc3NlcnQuaCIKQEAgLTI1OCw2ICsyNTksMjYgQEAgdm9pZCBJbUd1aU1hbmFnZXI6OlJlbmRlclRleHRPdmVybGF5cyhjb25zdCBHUFVCYWNrZW5kKiBncHUpCiAKICAgaWYgKGdfZ3B1X3NldHRpbmdzLmRpc3BsYXlfc2hvd19pbnB1dHMgJiYgIXBhdXNlZCkKICAgICBEcmF3SW5wdXRzT3ZlcmxheSgpOworCisgIGlmICghcGF1c2VkKQorICB7CisgICAgY29uc3QgYXV0byYgc3RhdGUgPSBTSUU6OlNJRUVuZ2luZTo6R2V0KCk7CisgICAgY29uc3QgZmxvYXQgZm9udF9zaXplID0gSW1DZWlsKDE4LjBmICogc2NhbGUpOworICAgIEltRm9udCogZm9udCA9IEltR3VpTWFuYWdlcjo6R2V0VGV4dEZvbnQoKTsKKyAgICBJbUd1aTo6UHVzaEZvbnQoZm9udCwgZm9udF9zaXplLCA0MDAuMGYpOworICAgIFNtYWxsU3RyaW5nIGJ1ZjsKKyAgICBjb25zdCBjaGFyKiBzdGF0ZV9zdHIgPSAiVU5LTk9XTiI7CisgICAgc3dpdGNoIChzdGF0ZS5HZXRTdGF0ZSgpKSB7CisgICAgICBjYXNlIFNJRTo6U0lFRW5naW5lOjpTdGF0ZTo6RGlzYWJsZWQ6IHN0YXRlX3N0ciA9ICJPRkYiOyBicmVhazsKKyAgICAgIGNhc2UgU0lFOjpTSUVFbmdpbmU6OlN0YXRlOjpBY3RpdmU6IHN0YXRlX3N0ciA9ICJPTiI7IGJyZWFrOworICAgIH0KKyAgICBidWYuZm9ybWF0KCJTSUU6IHt9IHwgWi1TY2FsZToge314Iiwgc3RhdGVfc3RyLCBTSUU6Omdfel9zY2FsZSk7CisgICAgSW1HdWk6OkJlZ2luKCIjI1NJRU92ZXJsYXkiLCBudWxscHRyLCBJbUd1aVdpbmRvd0ZsYWdzX05vVGl0bGVCYXIgfCBJbUd1aVdpbmRvd0ZsYWdzX05vUmVzaXplIHwKKyAgICAgICAgICAgICAgICAgSW1HdWlXaW5kb3dGbGFnc19Ob01vdmUgfCBJbUd1aVdpbmRvd0ZsYWdzX05vU2Nyb2xsYmFyIHwgSW1HdWlXaW5kb3dGbGFnc19Ob0lucHV0cyB8IEltR3VpV2luZG93RmxhZ3NfTm9OYXYpOworICAgIEltR3VpOjpUZXh0VW5mb3JtYXR0ZWQoYnVmLmNfc3RyKCkpOworICAgIEltR3VpOjpFbmQoKTsKKyAgICBJbUd1aTo6UG9wRm9udCgpOworICB9CiB9CiAKIHZvaWQgSW1HdWlNYW5hZ2VyOjpGb3JtYXRQcm9jZXNzb3JTdGF0KFNtYWxsU3RyaW5nQmFzZSYgdGV4dCwgZG91YmxlIHVzYWdlLCBkb3VibGUgdGltZSkKZGlmZiAtLWdpdCBhL3NyYy9jb3JlL3BjaC5oIGIvc3JjL2NvcmUvcGNoLmgKaW5kZXggMzZhZjU5Yi4uZTgxNmIyMCAxMDA2NDQKLS0tIGEvc3JjL2NvcmUvcGNoLmgKKysrIGIvc3JjL2NvcmUvcGNoLmgKQEAgLTEsNiArMSw4IEBACiAvLyBTUERYLUZpbGVDb3B5cmlnaHRUZXh0OiAyMDE5LTIwMjQgQ29ubm9yIE1jTGF1Z2hsaW4gPHN0ZW56ZWtAZ21haWwuY29tPgotLy8gU1BEWC1MaWNlbnNlLUlkZW50aWZpZXI6IENDLUJZLU5DLU5ELTQuMAorLy8gU1BEWC1MaWNlbnNlLUlkZW50aWZpZXI6IENDLUJZLU5ELTQuMAogCiAjcHJhZ21hIG9uY2UKIAogI2luY2x1ZGUgInV0aWwvcGNoLmgiCisKKyNpbmNsdWRlICJzaXNlL3NpZS5oIgpkaWZmIC0tZ2l0IGEvc3JjL2NvcmUvc3lzdGVtLmNwcCBiL3NyYy9jb3JlL3N5c3RlbS5jcHAKaW5kZXggZmJhNjAyNS4uNjM5YWQ3ZSAxMDA2NDQKLS0tIGEvc3JjL2NvcmUvc3lzdGVtLmNwcAorKysgYi9zcmMvY29yZS9zeXN0ZW0uY3BwCkBAIC00Miw2ICs0Miw4IEBACiAjaW5jbHVkZSAic3lzdGVtX3ByaXZhdGUuaCIKICNpbmNsdWRlICJ0aW1lcnMuaCIKICNpbmNsdWRlICJ2aWRlb19wcmVzZW50ZXIuaCIKKworI2luY2x1ZGUgInNpc2Uvc2llLmgiCiAjaW5jbHVkZSAidmlkZW9fdGhyZWFkLmgiCiAKICNpbmNsdWRlICJ1dGlsL2NkX2ltYWdlLmgiCkBAIC0yMDAxLDYgKzIwMDMsMTAgQEAgdm9pZCBTeXN0ZW06OkZyYW1lRG9uZSgpCiAKICAgICBDaGVhdHM6OkFwcGx5RnJhbWVFbmRDb2RlcygpOwogCisjaWZkZWYgV0lUSF9TSVNFCisgICAgU0lFOjpTSUVFbmdpbmU6OkdldCgpLk9uRnJhbWVFbmQoKTsKKyNlbmRpZgorCiAgICAgSFRUUERvd25sb2FkZXI6OlBvbGxSZXF1ZXN0cygpOwogCiAgICAgaWYgKEFjaGlldmVtZW50czo6SXNBY3RpdmUoKSkKZGlmZiAtLWdpdCBhL3NyYy9kdWNrc3RhdGlvbi1xdC9zZXR0aW5nc3dpbmRvdy5jcHAgYi9zcmMvZHVja3N0YXRpb24tcXQvc2V0dGluZ3N3aW5kb3cuY3BwCmluZGV4IGI2ZjM1OTYuLjJiMjI5ZWEgMTAwNjQ0Ci0tLSBhL3NyYy9kdWNrc3RhdGlvbi1xdC9zZXR0aW5nc3dpbmRvdy5jcHAKKysrIGIvc3JjL2R1Y2tzdGF0aW9uLXF0L3NldHRpbmdzd2luZG93LmNwcApAQCAtMyw2ICszLDcgQEAKIAogI2luY2x1ZGUgInNldHRpbmdzd2luZG93LmgiCiAjaW5jbHVkZSAiYWNoaWV2ZW1lbnRzZXR0aW5nc3dpZGdldC5oIgorI2luY2x1ZGUgInNpc2VzZXR0aW5nc3dpZGdldC5oIgogI2luY2x1ZGUgImFkdmFuY2Vkc2V0dGluZ3N3aWRnZXQuaCIKICNpbmNsdWRlICJhdWRpb3NldHRpbmdzd2lkZ2V0LmgiCiAjaW5jbHVkZSAiYmlvc3NldHRpbmdzd2lkZ2V0LmgiCkBAIC0xNDIsNiArMTQzLDggQEAgdm9pZCBTZXR0aW5nc1dpbmRvdzo6YWRkUGFnZXMoKQogICAgIHUiOi9pY29ucy9tb25vY2hyb21lL3N2Zy9tZW1jYXJkLWxpbmUuc3ZnIl9zLAogICAgIHRyKCI8c3Ryb25nPk1lbW9yeSBDYXJkIFNldHRpbmdzPC9zdHJvbmc+PGhyPlRoaXMgcGFnZSBsZXRzIHlvdSBjb250cm9sIHdoYXQgbW9kZSB0aGUgbWVtb3J5IGNhcmQgZW11bGF0aW9uIHdpbGwgIgogICAgICAgICJmdW5jdGlvbiBpbiwgYW5kIHdoZXJlIHRoZSBpbWFnZXMgZm9yIHRoZXNlIGNhcmRzIHdpbGwgYmUgc3RvcmVkIG9uIGRpc2suIikpOworICBhZGRXaWRnZXQobmV3IFNJU0VTZXR0aW5nc1dpZGdldCh0aGlzLCBtX3VpLnNldHRpbmdzQ29udGFpbmVyKSwgdHIoIkVuaGFuY2VkIE1vZGUiKSwKKyAgICB1IjovaWNvbnMvbW9ub2Nocm9tZS9zdmcvZXllLWxpbmUuc3ZnIl9zLCB0cigiU0lFIFNjZW5lIEluZmVyZW5jZSBFbmdpbmUg4oCUIHN1cHByZXNzZXMgcG9wLWluIGJ5IGV4dGVuZGluZyB0aGUgZ2FtZSdzIGN1bGxpbmcgcmFkaXVzLiIpKTsKICAgYWRkV2lkZ2V0KG5ldyBHcmFwaGljc1NldHRpbmdzV2lkZ2V0KHRoaXMsIG1fdWkuc2V0dGluZ3NDb250YWluZXIpLCB0cigiR3JhcGhpY3MiKSwKICAgICAgICAgICAgIHUiOi9pY29ucy9tb25vY2hyb21lL3N2Zy9pbWFnZS1maWxsLnN2ZyJfcywKICAgICAgICAgICAgIHRyKCI8c3Ryb25nPkdyYXBoaWNzIFNldHRpbmdzPC9zdHJvbmc+PGhyPlRoZXNlIG9wdGlvbnMgY29udHJvbCBob3cgdGhlIGdyYXBoaWNzIG9mIHRoZSBlbXVsYXRlZCBjb25zb2xlICIKZGlmZiAtLWdpdCBhL3NyYy9kdWNrc3RhdGlvbi1xdC9zaXNlc2V0dGluZ3N3aWRnZXQuY3BwIGIvc3JjL2R1Y2tzdGF0aW9uLXF0L3Npc2VzZXR0aW5nc3dpZGdldC5jcHAKbmV3IGZpbGUgbW9kZSAxMDA2NDQKaW5kZXggMDAwMDAwMC4uNzQ0NmQzNgotLS0gL2Rldi9udWxsCisrKyBiL3NyYy9kdWNrc3RhdGlvbi1xdC9zaXNlc2V0dGluZ3N3aWRnZXQuY3BwCkBAIC0wLDAgKzEsOTAgQEAKKy8vIFNQRFgtRmlsZUNvcHlyaWdodFRleHQ6IDIwMTktMjAyNSBDb25ub3IgTWNMYXVnaGxpbiA8c3Rlbnpla0BnbWFpbC5jb20+CisvLyBTUERYLUxpY2Vuc2UtSWRlbnRpZmllcjogQ0MtQlktTkMtTkQtNC4wCisKKyNpbmNsdWRlICJzaXNlc2V0dGluZ3N3aWRnZXQuaCIKKyNpbmNsdWRlICJxdGhvc3QuaCIKKyNpbmNsdWRlICJxdHV0aWxzLmgiCisjaW5jbHVkZSAic2V0dGluZ3N3aW5kb3cuaCIKKyNpbmNsdWRlICJzZXR0aW5nd2lkZ2V0YmluZGVyLmgiCisKKyNpbmNsdWRlICJjb3JlL2NvcmUuaCIKKworI2luY2x1ZGUgPFF0V2lkZ2V0cy9RQ2hlY2tCb3g+CisjaW5jbHVkZSA8UXRXaWRnZXRzL1FGb3JtTGF5b3V0PgorI2luY2x1ZGUgPFF0V2lkZ2V0cy9RR3JvdXBCb3g+CisjaW5jbHVkZSA8UXRXaWRnZXRzL1FIQm94TGF5b3V0PgorI2luY2x1ZGUgPFF0V2lkZ2V0cy9RTGFiZWw+CisjaW5jbHVkZSA8UXRXaWRnZXRzL1FTbGlkZXI+CisjaW5jbHVkZSA8UXRXaWRnZXRzL1FWQm94TGF5b3V0PgorCitTSVNFU2V0dGluZ3NXaWRnZXQ6OlNJU0VTZXR0aW5nc1dpZGdldChTZXR0aW5nc1dpbmRvdyogZGlhbG9nLCBRV2lkZ2V0KiBwYXJlbnQpCisgIDogUVdpZGdldChwYXJlbnQpCit7CisgIGF1dG8qIG1haW5MYXlvdXQgPSBuZXcgUVZCb3hMYXlvdXQodGhpcyk7CisKKyAgYXV0byogZ3JvdXAgPSBuZXcgUUdyb3VwQm94KHRyKCJTSUUg4oCUIEVuaGFuY2VkIERyYXcgRGlzdGFuY2UgKFotU2NhbGluZykiKSwgdGhpcyk7CisgIGF1dG8qIGxheW91dCA9IG5ldyBRRm9ybUxheW91dChncm91cCk7CisKKyAgbV9lbmFibGVkID0gbmV3IFFDaGVja0JveCh0cigiRW5hYmxlIEVuaGFuY2VkIERyYXcgRGlzdGFuY2UiKSwgZ3JvdXApOworICBTZXR0aW5nV2lkZ2V0QmluZGVyOjpCaW5kV2lkZ2V0VG9Cb29sU2V0dGluZyhudWxscHRyLCBtX2VuYWJsZWQsICJzaXNlIiwgImVuYWJsZWQiLCBmYWxzZSk7CisgIGxheW91dC0+YWRkUm93KG1fZW5hYmxlZCk7CisKKyAgbV9zaG93T3ZlcmxheSA9IG5ldyBRQ2hlY2tCb3godHIoIlNob3cgc3RhdHVzIG92ZXJsYXkiKSwgZ3JvdXApOworICBTZXR0aW5nV2lkZ2V0QmluZGVyOjpCaW5kV2lkZ2V0VG9Cb29sU2V0dGluZyhudWxscHRyLCBtX3Nob3dPdmVybGF5LCAic2lzZSIsICJzaG93X292ZXJsYXkiLCB0cnVlKTsKKyAgbGF5b3V0LT5hZGRSb3cobV9zaG93T3ZlcmxheSk7CisKKyAgYXV0byogc2NhbGVMYXlvdXQgPSBuZXcgUUhCb3hMYXlvdXQoKTsKKyAgbV9zY2FsZVNsaWRlciA9IG5ldyBRU2xpZGVyKFF0OjpIb3Jpem9udGFsLCBncm91cCk7CisgIG1fc2NhbGVTbGlkZXItPnNldFJhbmdlKDEsIDE2KTsKKyAgbV9zY2FsZVNsaWRlci0+c2V0VmFsdWUoNCk7CisgIG1fc2NhbGVTbGlkZXItPnNldFRpY2tJbnRlcnZhbCgxKTsKKyAgbV9zY2FsZVNsaWRlci0+c2V0VGlja1Bvc2l0aW9uKFFTbGlkZXI6OlRpY2tzQmVsb3cpOworICBtX3NjYWxlTGFiZWwgPSBuZXcgUUxhYmVsKCI0eCIsIGdyb3VwKTsKKyAgbV9zY2FsZUxhYmVsLT5zZXRNaW5pbXVtV2lkdGgoNDApOworICBzY2FsZUxheW91dC0+YWRkV2lkZ2V0KG1fc2NhbGVTbGlkZXIpOworICBzY2FsZUxheW91dC0+YWRkV2lkZ2V0KG1fc2NhbGVMYWJlbCk7CisKKyAgYXV0byogc2NhbGVSb3cgPSBuZXcgUVdpZGdldChncm91cCk7CisgIHNjYWxlUm93LT5zZXRMYXlvdXQoc2NhbGVMYXlvdXQpOworICBsYXlvdXQtPmFkZFJvdyh0cigiRHJhdyBkaXN0YW5jZSBtdWx0aXBsaWVyOiIpLCBzY2FsZVJvdyk7CisKKyAgbV9zY2FsZVNsaWRlci0+c2V0VG9vbFRpcCh0cigiU2NhbGVzIHRoZSBaLWRlcHRoIHZhbHVlIHRoZSBnYW1lIHJlYWRzIGZvciBjdWxsaW5nLlxuIgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAiNHggPSA0eCBkcmF3IGRpc3RhbmNlLiBIaWdoZXIgPSBtb3JlIGdlb21ldHJ5IHZpc2libGUuXG4iCisgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJUb28gaGlnaCBtYXkgY2F1c2Ugc2xvd2Rvd24gKG1vcmUgcG9seWdvbnMgdG8gcmVuZGVyKS4iKSk7CisKKyAgbV9zdGF0dXNMYWJlbCA9IG5ldyBRTGFiZWwoZ3JvdXApOworICBtX3N0YXR1c0xhYmVsLT5zZXRXb3JkV3JhcCh0cnVlKTsKKyAgbV9zdGF0dXNMYWJlbC0+c2V0U3R5bGVTaGVldCgicGFkZGluZzogOHB4OyBiYWNrZ3JvdW5kOiByZ2JhKDAsMCwwLDAuMSk7IGJvcmRlci1yYWRpdXM6IDRweDsiKTsKKyAgbGF5b3V0LT5hZGRSb3codHIoIlN0YXR1czoiKSwgbV9zdGF0dXNMYWJlbCk7CisKKyAgbWFpbkxheW91dC0+YWRkV2lkZ2V0KGdyb3VwKTsKKyAgbWFpbkxheW91dC0+YWRkU3RyZXRjaCgxKTsKKworICBjb25uZWN0KG1fZW5hYmxlZCwgJlFDaGVja0JveDo6Y2hlY2tTdGF0ZUNoYW5nZWQsIHRoaXMsICZTSVNFU2V0dGluZ3NXaWRnZXQ6Om9uRW5hYmxlZENoYW5nZWQpOworICBjb25uZWN0KG1fc2NhbGVTbGlkZXIsICZRU2xpZGVyOjp2YWx1ZUNoYW5nZWQsIHRoaXMsIFt0aGlzXShpbnQgdmFsKSB7CisgICAgbV9zY2FsZUxhYmVsLT5zZXRUZXh0KFFTdHJpbmcoIiUxeCIpLmFyZyh2YWwpKTsKKyAgICBDb3JlOjpTZXRCYXNlRmxvYXRTZXR0aW5nVmFsdWUoInNpc2UiLCAiel9zY2FsZV9mYWN0b3IiLCBzdGF0aWNfY2FzdDxmbG9hdD4odmFsKSk7CisgICAgdXBkYXRlU3RhdHVzKCk7CisgIH0pOworICB1cGRhdGVTdGF0dXMoKTsKK30KKwordm9pZCBTSVNFU2V0dGluZ3NXaWRnZXQ6Om9uRW5hYmxlZENoYW5nZWQoUXQ6OkNoZWNrU3RhdGUgc3RhdGUpCit7CisgIHVwZGF0ZVN0YXR1cygpOworfQorCit2b2lkIFNJU0VTZXR0aW5nc1dpZGdldDo6dXBkYXRlU3RhdHVzKCkKK3sKKyAgUVN0cmluZyBzdGF0dXM7CisgIGlmICghbV9lbmFibGVkLT5pc0NoZWNrZWQoKSkgeworICAgIHN0YXR1cyA9IHRyKCI8YiBzdHlsZT0nY29sb3I6Z3JheSc+RElTQUJMRUQ8L2I+IOKAlCBPcmlnaW5hbCBkcmF3IGRpc3RhbmNlLiBObyBlbmhhbmNlbWVudC4iKTsKKyAgfSBlbHNlIHsKKyAgICBpbnQgc2NhbGUgPSBtX3NjYWxlU2xpZGVyLT52YWx1ZSgpOworICAgIHN0YXR1cyA9IHRyKCI8YiBzdHlsZT0nY29sb3I6Z3JlZW4nPkFDVElWRTwvYj4g4oCUIFotZGVwdGggc2NhbGVkIGJ5ICUxeC4gIgorICAgICAgICAgICAgICAgICJUaGUgZ2FtZSdzIGN1bGxpbmcgc2VlcyBvYmplY3RzIGFzICUxeCBjbG9zZXIuICIKKyAgICAgICAgICAgICAgICAiU2NyZWVuIHBvc2l0aW9ucyBhcmUgdW5hZmZlY3RlZCAocGVyc3BlY3RpdmUgdXNlcyByZWFsIFopLiIpCisgICAgICAgICAgICAgICAgIC5hcmcoc2NhbGUpOworICB9CisgIG1fc3RhdHVzTGFiZWwtPnNldFRleHQoc3RhdHVzKTsKK30KZGlmZiAtLWdpdCBhL3NyYy9kdWNrc3RhdGlvbi1xdC9zaXNlc2V0dGluZ3N3aWRnZXQuaCBiL3NyYy9kdWNrc3RhdGlvbi1xdC9zaXNlc2V0dGluZ3N3aWRnZXQuaApuZXcgZmlsZSBtb2RlIDEwMDY0NAppbmRleCAwMDAwMDAwLi41MDk3MzVmCi0tLSAvZGV2L251bGwKKysrIGIvc3JjL2R1Y2tzdGF0aW9uLXF0L3Npc2VzZXR0aW5nc3dpZGdldC5oCkBAIC0wLDAgKzEsMjkgQEAKKy8vIFNQRFgtRmlsZUNvcHlyaWdodFRleHQ6IDIwMTktMjAyNSBDb25ub3IgTWNMYXVnaGxpbiA8c3Rlbnpla0BnbWFpbC5jb20+CisvLyBTUERYLUxpY2Vuc2UtSWRlbnRpZmllcjogQ0MtQlktTkMtTkQtNC4wCisKKyNwcmFnbWEgb25jZQorCisjaW5jbHVkZSA8UXRXaWRnZXRzL1FXaWRnZXQ+CisKK2NsYXNzIFNldHRpbmdzV2luZG93OworY2xhc3MgUUNoZWNrQm94OworY2xhc3MgUUxhYmVsOworY2xhc3MgUVNsaWRlcjsKKworY2xhc3MgU0lTRVNldHRpbmdzV2lkZ2V0IDogcHVibGljIFFXaWRnZXQKK3sKKyAgUV9PQkpFQ1QKKworcHVibGljOgorICBTSVNFU2V0dGluZ3NXaWRnZXQoU2V0dGluZ3NXaW5kb3cqIGRpYWxvZywgUVdpZGdldCogcGFyZW50KTsKKworcHJpdmF0ZToKKyAgUUNoZWNrQm94KiBtX2VuYWJsZWQ7CisgIFFDaGVja0JveCogbV9zaG93T3ZlcmxheTsKKyAgUVNsaWRlciogbV9zY2FsZVNsaWRlcjsKKyAgUUxhYmVsKiBtX3NjYWxlTGFiZWw7CisgIFFMYWJlbCogbV9zdGF0dXNMYWJlbDsKKworICB2b2lkIG9uRW5hYmxlZENoYW5nZWQoUXQ6OkNoZWNrU3RhdGUgc3RhdGUpOworICB2b2lkIHVwZGF0ZVN0YXR1cygpOworfTsKZGlmZiAtLWdpdCBhL3NyYy9zaXNlL3NpZS5jcHAgYi9zcmMvc2lzZS9zaWUuY3BwCm5ldyBmaWxlIG1vZGUgMTAwNjQ0CmluZGV4IDAwMDAwMDAuLjY5MGZjYjYKLS0tIC9kZXYvbnVsbAorKysgYi9zcmMvc2lzZS9zaWUuY3BwCkBAIC0wLDAgKzEsNzggQEAKKy8vIFNQRFgtTGljZW5zZS1JZGVudGlmaWVyOiBCU0QtMy1DbGF1c2UKKy8vIFNJRSB2MC42IOKAlCBHVEUgWi1TY2FsaW5nCisvLworLy8gVGhlIGdwdUJsYWRlU29mdCB0ZWNobmlxdWU6IGRlY291cGxlIHRoZSBaIHVzZWQgZm9yIHBlcnNwZWN0aXZlIGZyb20KKy8vIHRoZSBaIHVzZWQgZm9yIGN1bGxpbmcuIFRoZSBHVEUncyBSVFBTL1JUUFQgY29tcHV0ZXMgc2NyZWVuIGNvb3JkcyAoU1gsIFNZKQorLy8gdXNpbmcgdGhlIHJlYWwgWiBpbnRlcm5hbGx5LiBXaGVuIHRoZSBnYW1lIHJlYWRzIFNaL09UWiB2aWEgbWZjMiBmb3IKKy8vIGN1bGxpbmcsIHdlIHNjYWxlIHRoZSB2YWx1ZSBkb3duLiBUaGUgZ2FtZSB0aGlua3MgZGlzdGFudCBvYmplY3RzIGFyZQorLy8gY2xvc2VyIOKGkiBkb2Vzbid0IGN1bGwgdGhlbS4gU2NyZWVuIHBvc2l0aW9uIGlzIHVuYWZmZWN0ZWQuCisvLworLy8gTm8gTUlQUyBwYXRjaGluZy4gTm8gY29kZSBzY2FubmluZy4gTm8gcGVyLWdhbWUgd29yay4gVW5pdmVyc2FsLgorLy8gT25lIGhvb2sgaW4gR1RFOjpSZWFkUmVnaXN0ZXIuCisjaW5jbHVkZSA8Y21hdGg+CisKKyNpbmNsdWRlICJzaXNlL3NpZS5oIgorCisjaW5jbHVkZSAiY29tbW9uL2xvZy5oIgorI2luY2x1ZGUgImNvcmUvY29yZS5oIgorCitMT0dfQ0hBTk5FTChHUFUpOworCituYW1lc3BhY2UgU0lFIHsKKworYm9vbCBnX2VuYWJsZWQgPSBmYWxzZTsKK3UzMiBnX3pfc2NhbGUgPSAxOyAgLy8gMSA9IG5vIHNjYWxpbmcgKGRpc2FibGVkKSwgNCA9IDR4IGRyYXcgZGlzdGFuY2UKKworZmxvYXQgVmVjM2Y6OkRpc3RhbmNlVG8oY29uc3QgVmVjM2YmIG8pIGNvbnN0IHsKKyAgY29uc3QgZmxvYXQgZHggPSB4IC0gby54LCBkeSA9IHkgLSBvLnksIGR6ID0geiAtIG8uejsKKyAgcmV0dXJuIHN0ZDo6c3FydChkeCAqIGR4ICsgZHkgKiBkeSArIGR6ICogZHopOworfQorCitTSUVFbmdpbmU6OlNJRUVuZ2luZSgpID0gZGVmYXVsdDsKK1NJRUVuZ2luZTo6flNJRUVuZ2luZSgpID0gZGVmYXVsdDsKKworU0lFRW5naW5lJiBTSUVFbmdpbmU6OkdldCgpIHsKKyAgc3RhdGljIFNJRUVuZ2luZSBpbnN0YW5jZTsKKyAgcmV0dXJuIGluc3RhbmNlOworfQorCit2b2lkIFNJRUVuZ2luZTo6SW5pdGlhbGl6ZSgpIHsKKyAgc3RkOjpsb2NrX2d1YXJkPHN0ZDo6bXV0ZXg+IGxvY2sobV9tdXRleCk7CisgIFJlbG9hZFNldHRpbmdzKCk7CisgIGlmICghbV9zZXR0aW5ncy5lbmFibGVkKSB7CisgICAgZ19lbmFibGVkID0gZmFsc2U7CisgICAgZ196X3NjYWxlID0gMTsKKyAgICBtX3N0YXRlID0gU3RhdGU6OkRpc2FibGVkOworICAgIHJldHVybjsKKyAgfQorICBnX2VuYWJsZWQgPSB0cnVlOworICBnX3pfc2NhbGUgPSBzdGF0aWNfY2FzdDx1MzI+KG1fc2V0dGluZ3Muel9zY2FsZV9mYWN0b3IpOworICBpZiAoZ196X3NjYWxlIDwgMSkgZ196X3NjYWxlID0gMTsKKyAgbV9zdGF0ZSA9IFN0YXRlOjpBY3RpdmU7CisgIElORk9fTE9HKCJTSUUgdjAuNjogWi1zY2FsaW5nIGFjdGl2ZSAoc2NhbGU9e30pIiwgZ196X3NjYWxlKTsKK30KKwordm9pZCBTSUVFbmdpbmU6OlNodXRkb3duKCkgeworICBzdGQ6OmxvY2tfZ3VhcmQ8c3RkOjptdXRleD4gbG9jayhtX211dGV4KTsKKyAgZ19lbmFibGVkID0gZmFsc2U7CisgIGdfel9zY2FsZSA9IDE7CisgIG1fc3RhdGUgPSBTdGF0ZTo6RGlzYWJsZWQ7Cit9CisKK3ZvaWQgU0lFRW5naW5lOjpSZWxvYWRTZXR0aW5ncygpIHsKKyAgbV9zZXR0aW5ncy5lbmFibGVkID0gQ29yZTo6R2V0QmFzZUJvb2xTZXR0aW5nVmFsdWUoInNpc2UiLCAiZW5hYmxlZCIsIGZhbHNlKTsKKyAgbV9zZXR0aW5ncy56X3NjYWxlX2ZhY3RvciA9IENvcmU6OkdldEJhc2VGbG9hdFNldHRpbmdWYWx1ZSgic2lzZSIsICJ6X3NjYWxlX2ZhY3RvciIsIDQuMGYpOworICBtX3NldHRpbmdzLnNob3dfb3ZlcmxheSA9IENvcmU6OkdldEJhc2VCb29sU2V0dGluZ1ZhbHVlKCJzaXNlIiwgInNob3dfb3ZlcmxheSIsIHRydWUpOworfQorCit2b2lkIFNJRUVuZ2luZTo6T25GcmFtZUVuZCgpIHsKKyAgLy8gdjAuNjogbm90aGluZyB0byBkbyBwZXIgZnJhbWUuIFRoZSBaLXNjYWxpbmcgaGFwcGVucyBpbiBHVEU6OlJlYWRSZWdpc3Rlci4KK30KKworfSAgLy8gbmFtZXNwYWNlIFNJRQorCisjaWZkZWYgV0lUSF9TSVNFCitleHRlcm4gIkMiIHZvaWQgU0lFX0NhcHR1cmVHVEUoKSB7CisgIC8vIHYwLjY6IG5vLW9wLiBaLXNjYWxpbmcgaGFwcGVucyBpbiBHVEU6OlJlYWRSZWdpc3Rlciwgbm90IHBlci1pbnN0cnVjdGlvbi4KK30KKyNlbmRpZgpkaWZmIC0tZ2l0IGEvc3JjL3Npc2Uvc2llLmggYi9zcmMvc2lzZS9zaWUuaApuZXcgZmlsZSBtb2RlIDEwMDY0NAppbmRleCAwMDAwMDAwLi4yNzVjZGJlCi0tLSAvZGV2L251bGwKKysrIGIvc3JjL3Npc2Uvc2llLmgKQEAgLTAsMCArMSw1NSBAQAorLy8gU1BEWC1MaWNlbnNlLUlkZW50aWZpZXI6IEJTRC0zLUNsYXVzZQorLy8gU0lFIHYwLjYg4oCUIEdURSBaLVNjYWxpbmcKKy8vIERlY291cGxlcyB0aGUgWiB1c2VkIGZvciBwZXJzcGVjdGl2ZSBmcm9tIHRoZSBaIHVzZWQgZm9yIGN1bGxpbmcuCisvLyBUaGUgR1RFIGFscmVhZHkgY29tcHV0ZWQgc2NyZWVuIGNvb3JkcyB3aXRoIHJlYWwgWi4gV2Ugc2NhbGUgWiBvbiByZWFkCisvLyBzbyB0aGUgZ2FtZSdzIGN1bGxpbmcgY29tcGFyaXNvbiBzZWVzIGEgc21hbGxlciBkZXB0aCDihpIgZG9lc24ndCBjdWxsLgorLy8gTm8gTUlQUyBwYXRjaGluZy4gTm8gY29kZSBzY2FubmluZy4gT25lIEdURSByZWdpc3RlciBob29rLiBVbml2ZXJzYWwuCisjcHJhZ21hIG9uY2UKKworI2luY2x1ZGUgImNvbW1vbi90eXBlcy5oIgorI2luY2x1ZGUgPG11dGV4PgorCituYW1lc3BhY2UgU0lFIHsKKworc3RydWN0IFNldHRpbmdzIHsKKyAgYm9vbCBlbmFibGVkID0gZmFsc2U7CisgIGZsb2F0IHpfc2NhbGVfZmFjdG9yID0gNC4wZjsgIC8vIERpdmlkZSBaIGJ5IHRoaXMgb24gcmVhZC4gNCA9IDR4IGRyYXcgZGlzdGFuY2UuCisgIGJvb2wgc2hvd19vdmVybGF5ID0gdHJ1ZTsKK307CisKK3N0cnVjdCBWZWMzZiB7CisgIGZsb2F0IHgsIHksIHo7CisgIGZsb2F0IERpc3RhbmNlVG8oY29uc3QgVmVjM2YmIG8pIGNvbnN0OworfTsKKworY2xhc3MgU0lFRW5naW5lIHsKK3B1YmxpYzoKKyAgc3RhdGljIFNJRUVuZ2luZSYgR2V0KCk7CisgIHZvaWQgSW5pdGlhbGl6ZSgpOworICB2b2lkIFNodXRkb3duKCk7CisgIHZvaWQgUmVsb2FkU2V0dGluZ3MoKTsKKyAgdm9pZCBPbkZyYW1lRW5kKCk7CisKKyAgZW51bSBjbGFzcyBTdGF0ZSA6IHU4IHsgRGlzYWJsZWQsIEFjdGl2ZSB9OworICBTdGF0ZSBHZXRTdGF0ZSgpIGNvbnN0IHsgcmV0dXJuIG1fc3RhdGU7IH0KKyAgY29uc3QgU2V0dGluZ3MmIEdldFNldHRpbmdzKCkgY29uc3QgeyByZXR1cm4gbV9zZXR0aW5nczsgfQorCitwcml2YXRlOgorICBTSUVFbmdpbmUoKTsKKyAgflNJRUVuZ2luZSgpOworICBTSUVFbmdpbmUoY29uc3QgU0lFRW5naW5lJikgPSBkZWxldGU7CisgIFNJRUVuZ2luZSYgb3BlcmF0b3I9KGNvbnN0IFNJRUVuZ2luZSYpID0gZGVsZXRlOworCisgIFNldHRpbmdzIG1fc2V0dGluZ3M7CisgIHN0ZDo6bXV0ZXggbV9tdXRleDsKKyAgU3RhdGUgbV9zdGF0ZSA9IFN0YXRlOjpEaXNhYmxlZDsKK307CisKK2V4dGVybiBib29sIGdfZW5hYmxlZDsKK2V4dGVybiB1MzIgZ196X3NjYWxlOyAgLy8gSW50ZWdlciBzY2FsZSBmYWN0b3IgKDEgPSBkaXNhYmxlZCwgNCA9IDR4IGRyYXcgZGlzdGFuY2UpCisKK30gIC8vIG5hbWVzcGFjZSBTSUUKKworI2lmZGVmIFdJVEhfU0lTRQorZXh0ZXJuICJDIiB2b2lkIFNJRV9DYXB0dXJlR1RFKCk7CisjZW5kaWYK")
+          with open("duckstation-sie.patch", "wb") as f:
+              f.write(data)
+          print(f"Patch: {len(data)} bytes")
 
-          def rd(p):
-              import os
-              if not os.path.exists(p): return ''
-              with open(p, 'r', encoding='utf-8', errors='replace') as f: return f.read()
-          def wr(p, c):
-              import os
-              os.makedirs(os.path.dirname(p) if os.path.dirname(p) else '.', exist_ok=True)
-              with open(p, 'w', encoding='utf-8') as f: f.write(c)
-          def patch(path, anchor, ins, after=True):
-              c = rd(path)
-              if ins.strip() in c: return
-              i = c.find(anchor)
-              if i < 0:
-                  print(f"  WARN: anchor not found in {path}: {anchor[:50]}")
-                  return
-              if after:
-                  e = c.find('\n', i) + 1
-                  c = c[:e] + ins + '\n' + c[e:]
-              else:
-                  c = c[:i] + ins + '\n' + c[i:]
-              wr(path, c)
-              print(f"  OK: {path}")
-
-          # === D3: Write corrected MipsPatternScanner.cpp ===
-          mips = r'''// SPDX-License-Identifier: BSD-3-Clause
-          #include "rsil/MipsPatternScanner.h"
-          #include <algorithm>
-          #include <chrono>
-          #include <cstring>
-          namespace rsil {
-          enum class ResultType { ZeroOrOne, GeneralValue };
-          struct BranchSafety { bool tests_result_reg=false; bool safe_to_max_imm=false; bool degenerate=false; std::string reason; };
-          static inline uint32_t read_code_word(const std::vector<uint8_t>& c, size_t o) {
-              return (uint32_t)c[o]|((uint32_t)c[o+1]<<8)|((uint32_t)c[o+2]<<16)|((uint32_t)c[o+3]<<24); }
-          static BranchSafety analyze_branch_safety(uint32_t bw, uint32_t rr, ResultType rt) {
-              BranchSafety bs; uint32_t op=mips::bits(bw,31,26),rs=mips::bits(bw,25,21),rtf=mips::bits(bw,20,16);
-              if(op==mips::OP_BEQ||op==mips::OP_BNE){bool t=(rs==rr&&rtf==0)||(rtf==rr&&rs==0);if(!t){bs.reason="no";return bs;}bs.tests_result_reg=true;
-                  if(rt==ResultType::ZeroOrOne){if(op==mips::OP_BEQ){bs.safe_to_max_imm=true;bs.reason="beq safe";}else bs.reason="bne unsafe";}else{bs.degenerate=true;bs.reason="eq/ne";}return bs;}
-              if(op==mips::OP_BLEZ||op==mips::OP_BGTZ){if(rs!=rr){bs.reason="no";return bs;}bs.tests_result_reg=true;
-                  if(rt==ResultType::ZeroOrOne){if(op==mips::OP_BLEZ){bs.safe_to_max_imm=true;bs.reason="blez safe";}else bs.reason="bgtz unsafe";}else{if(op==mips::OP_BGTZ){bs.safe_to_max_imm=true;bs.reason="bgtz safe";}else bs.reason="blez unsafe";}return bs;}
-              if(op==mips::OP_REGIMM){if(rs!=rr){bs.reason="no";return bs;}bs.tests_result_reg=true;
-                  if(rt==ResultType::ZeroOrOne){bs.degenerate=true;bs.reason="regimm 0/1";}else{if(rtf==mips::RT_BGEZ){bs.safe_to_max_imm=true;bs.reason="bgez safe";}else bs.reason="bltz unsafe";}return bs;}
-              bs.reason="not branch";return bs; }
-          static const char kPsxExeMagic[8]={'P','S','-','X',' ','E','X','E'};
-          bool parse_psx_exe(const uint8_t* data, size_t size, PsxExeInfo& out) {
-              size_t se=std::min(size,(size_t)0x10000),mo=size;
-              for(size_t i=0;i+8<=se;++i){if(!std::memcmp(data+i,kPsxExeMagic,8)){mo=i;break;}}
-              if(mo>=size)return false;if(mo+0x800>size)return false;
-              const uint8_t* h=data+mo;
-              out.initial_pc=(uint32_t)h[0x10]|((uint32_t)h[0x11]<<8)|((uint32_t)h[0x12]<<16)|((uint32_t)h[0x13]<<24);
-              out.text_addr=(uint32_t)h[0x18]|((uint32_t)h[0x19]<<8)|((uint32_t)h[0x1A]<<16)|((uint32_t)h[0x1B]<<24);
-              out.text_size=(uint32_t)h[0x1C]|((uint32_t)h[0x1D]<<8)|((uint32_t)h[0x1E]<<16)|((uint32_t)h[0x1F]<<24);
-              size_t co=mo+0x800;
-              if(out.text_size==0||out.text_size>0x800000)out.text_size=(uint32_t)std::min(size-co,(size_t)0x200000);
-              size_t av=std::min(size-co,(size_t)out.text_size);
-              out.code.assign(data+co,data+co+av);return true; }
-          MipsPatternScanner::MipsPatternScanner()=default;
-          bool MipsPatternScanner::check_branch_within(const std::vector<uint8_t>& code, size_t offset, int max_dist, std::string& br_type, int& br_dist) const {
-              for(int j=1;j<=max_dist&&offset+(size_t)j*4+4<=code.size();++j){size_t pos=offset+(size_t)j*4;uint32_t word=read_code_word(code,pos);uint32_t op=mips::bits(word,31,26),rt=mips::bits(word,20,16);
-                  if(op==mips::OP_BEQ){br_type="beq";br_dist=j;return true;}if(op==mips::OP_BNE){br_type="bne";br_dist=j;return true;}
-                  if(op==mips::OP_BLEZ){br_type="blez";br_dist=j;return true;}if(op==mips::OP_BGTZ){br_type="bgtz";br_dist=j;return true;}
-                  if(op==mips::OP_REGIMM){if(rt==mips::RT_BLTZ){br_type="bltz";br_dist=j;return true;}if(rt==mips::RT_BGEZ){br_type="bgez";br_dist=j;return true;}}
-                  if(op==mips::OP_COP1){uint32_t rs=mips::bits(word,25,21);if(rs==0x08){br_type=mips::bits(word,16,16)?"bc1t":"bc1f";br_dist=j;return true;}}}
-              return false; }
-          static inline ScanCandidate make_candidate(const std::string& pat,uint32_t addr,int32_t val,const std::string& dis,const std::string& bt,int bd,size_t wo,uint32_t pw,bool ap,const std::vector<uint8_t>& code){
-              ScanCandidate c;c.pattern=pat;c.address=addr;c.value=val;c.disasm=dis;c.branch_type=bt;c.word_offset=(uint32_t)wo;c.patch_word=pw;c.auto_patchable=ap;
-              if(wo+4<=code.size()){std::memcpy(c.orig_bytes.data(),code.data()+wo,4);if(ap){c.patch_bytes={(uint8_t)(pw&0xFF),(uint8_t)((pw>>8)&0xFF),(uint8_t)((pw>>16)&0xFF),(uint8_t)((pw>>24)&0xFF)};}}return c; }
-          void MipsPatternScanner::scan_pattern_1(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              for(size_t i=0;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);uint32_t op=mips::bits(word,31,26);
-                  if(op!=mips::OP_SLTI&&op!=mips::OP_SLTIU)continue;int32_t imm=mips::sign_extend_16(mips::bits(word,15,0));if(imm<min_val_||imm>max_val_)continue;
-                  std::string bt;int bd;if(!check_branch_within(code,i,4,bt,bd))continue;uint32_t rs=mips::bits(word,25,21),rt=mips::bits(word,20,16);
-                  BranchSafety bs=analyze_branch_safety(read_code_word(code,i+(size_t)bd*4),rt,ResultType::ZeroOrOne);if(!bs.tests_result_reg||bs.degenerate)continue;
-                  const char* nm=(op==mips::OP_SLTIU)?"sltiu":"slti";bool ap=bs.safe_to_max_imm;uint32_t patch=ap?(op<<26)|(rs<<21)|(rt<<16)|32767:0;
-                  char d[192];std::snprintf(d,sizeof(d),"%s $%u,$%u,%d|%s",nm,rt,rs,imm,bs.reason.c_str());
-                  out.push_back(make_candidate(std::string("P1-")+nm,text_addr+(uint32_t)i,imm,d,bt,bd,i,patch,ap,code));} }
-          void MipsPatternScanner::scan_pattern_2(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              if(code.size()<12)return;
-              for(size_t i=4;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);uint32_t op=mips::bits(word,31,26),funct=mips::bits(word,5,0);
-                  if(op!=mips::OP_SPECIAL||(funct!=mips::F_SUB&&funct!=mips::F_SUBU))continue;uint32_t rd=mips::bits(word,15,11);
-                  size_t pp=i-4;uint32_t pw=read_code_word(code,pp);if(mips::bits(pw,31,26)!=mips::OP_ADDIU)continue;
-                  int32_t pi=mips::sign_extend_16(mips::bits(pw,15,0));if(std::abs(pi)<min_val_||std::abs(pi)>max_val_)continue;
-                  if(i+8>code.size())continue;uint32_t nw=read_code_word(code,i+4);if(mips::bits(nw,31,26)!=mips::OP_REGIMM)continue;
-                  uint32_t nrt=mips::bits(nw,20,16),nrs=mips::bits(nw,25,21);if(nrt!=mips::RT_BLTZ&&nrt!=mips::RT_BGEZ)continue;if(nrs!=rd)continue;
-                  BranchSafety bs=analyze_branch_safety(nw,rd,ResultType::GeneralValue);if(!bs.tests_result_reg||bs.degenerate)continue;
-                  uint32_t prr=mips::bits(pw,20,16);const char* bn=(nrt==mips::RT_BLTZ)?"bltz":"bgez";bool ap=bs.safe_to_max_imm;
-                  uint32_t patch=ap?(mips::OP_ADDIU<<26)|(prr<<16)|32767:0;
-                  out.push_back(make_candidate(std::string("P2-")+(funct==mips::F_SUBU?"subu+":"sub+")+bn,text_addr+(uint32_t)pp,std::abs(pi),bn,bn,2,pp,patch,ap,code));} }
-          void MipsPatternScanner::scan_pattern_3(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              for(size_t i=0;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);if(mips::bits(word,31,26)!=mips::OP_ADDIU)continue;
-                  int32_t imm=mips::sign_extend_16(mips::bits(word,15,0));if(imm>=0||std::abs(imm)<min_val_||std::abs(imm)>max_val_)continue;
-                  uint32_t rt=mips::bits(word,20,16),rs=mips::bits(word,25,21);if(i+8>code.size())continue;
-                  uint32_t nw=read_code_word(code,i+4);if(mips::bits(nw,31,26)!=mips::OP_REGIMM)continue;
-                  uint32_t nrt=mips::bits(nw,20,16),nrs=mips::bits(nw,25,21);if(nrt!=mips::RT_BLTZ&&nrt!=mips::RT_BGEZ)continue;if(nrs!=rt)continue;
-                  BranchSafety bs=analyze_branch_safety(nw,rt,ResultType::GeneralValue);if(!bs.tests_result_reg||bs.degenerate)continue;
-                  const char* bn=(nrt==mips::RT_BLTZ)?"bltz":"bgez";bool ap=bs.safe_to_max_imm;
-                  uint32_t patch=ap?(mips::OP_ADDIU<<26)|(rs<<21)|(rt<<16)|((uint32_t)(-32767)&0xFFFF):0;
-                  out.push_back(make_candidate(std::string("P3-addiu+")+bn,text_addr+(uint32_t)i,std::abs(imm),bn,bn,1,i,patch,ap,code));} }
-          void MipsPatternScanner::scan_pattern_4(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              for(size_t i=0;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);if(mips::bits(word,31,26)!=mips::OP_COP1)continue;
-                  uint32_t fmt=mips::bits(word,25,21);if(fmt!=0x10)continue;uint32_t funct=mips::bits(word,5,0);
-                  if(funct!=0x3C&&funct!=0x3D&&funct!=0x3E&&funct!=0x3F)continue;
-                  std::string bt;int bd;if(!check_branch_within(code,i,3,bt,bd))continue;
-                  const char* cond=(funct==0x3C||funct==0x3D)?"c.lt.s":"c.le.s";char d[128];std::snprintf(d,sizeof(d),"%s;%s",cond,bt.c_str());
-                  out.push_back(make_candidate("P4-float",text_addr+(uint32_t)i,-1,d,bt,bd,i,0,false,code));} }
-          void MipsPatternScanner::scan_pattern_5(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              if(code.size()<12)return;
-              for(size_t i=0;i+12<=code.size();i+=4){uint32_t word=read_code_word(code,i);if(mips::bits(word,31,26)!=mips::OP_COP2)continue;
-                  uint32_t rs=mips::bits(word,25,21);if(rs!=0x00&&rs!=0x02)continue;
-                  for(int j=1;j<=3&&i+(size_t)j*4+4<=code.size();++j){size_t pos=i+(size_t)j*4;uint32_t chk=read_code_word(code,pos);
-                      if(mips::bits(chk,31,26)!=mips::OP_ANDI)continue;uint32_t ai=mips::bits(chk,15,0);if(ai==0)continue;
-                      std::string bt;int bd;if(!check_branch_within(code,pos,2,bt,bd))continue;
-                      char d[128];std::snprintf(d,sizeof(d),"cfc2;andi 0x%04X;%s",ai,bt.c_str());
-                      out.push_back(make_candidate("P5-GTE-flag",text_addr+(uint32_t)i,(int32_t)ai,d,bt,j+1,i,0,false,code));break;}} }
-          void MipsPatternScanner::scan_pattern_6(const std::vector<uint8_t>& code,uint32_t text_addr,std::vector<ScanCandidate>& out) const {
-              if(code.size()<12)return;
-              for(size_t i=4;i+8<=code.size();i+=4){uint32_t word=read_code_word(code,i);if(mips::bits(word,31,26)!=mips::OP_SPECIAL)continue;
-                  if(mips::bits(word,5,0)!=mips::F_SLTU)continue;uint32_t rd=mips::bits(word,15,11);
-                  size_t pp=i-4;uint32_t pw=read_code_word(code,pp);if(mips::bits(pw,31,26)!=mips::OP_ADDIU)continue;
-                  int32_t pi=mips::sign_extend_16(mips::bits(pw,15,0));if(pi<min_val_||pi>max_val_)continue;
-                  std::string bt;int bd;if(!check_branch_within(code,i,2,bt,bd))continue;
-                  BranchSafety bs=analyze_branch_safety(read_code_word(code,i+(size_t)bd*4),rd,ResultType::ZeroOrOne);if(!bs.tests_result_reg||bs.degenerate)continue;
-                  uint32_t prr=mips::bits(pw,20,16);bool ap=bs.safe_to_max_imm;uint32_t patch=ap?(mips::OP_ADDIU<<26)|(prr<<16)|32767:0;
-                  out.push_back(make_candidate("P6-sltu-range",text_addr+(uint32_t)pp,pi,bt,bt,bd,pp,patch,ap,code));} }
-          std::vector<ScanCandidate> MipsPatternScanner::scan(const PsxExeInfo& exe) const {
-              auto t0=std::chrono::high_resolution_clock::now();stats_={};std::vector<ScanCandidate> all;
-              scan_pattern_1(exe.code,exe.text_addr,all);scan_pattern_2(exe.code,exe.text_addr,all);
-              scan_pattern_3(exe.code,exe.text_addr,all);scan_pattern_6(exe.code,exe.text_addr,all);
-              if(scan_floats_)scan_pattern_4(exe.code,exe.text_addr,all);scan_pattern_5(exe.code,exe.text_addr,all);
-              std::sort(all.begin(),all.end(),[](const ScanCandidate&a,const ScanCandidate&b){if(a.auto_patchable!=b.auto_patchable)return a.auto_patchable;int da=(a.value>0)?std::abs(a.value-200):9999;int db=(b.value>0)?std::abs(b.value-200):9999;return da<db;});
-              auto t1=std::chrono::high_resolution_clock::now();stats_.scan_time_us=(uint64_t)std::chrono::duration_cast<std::chrono::microseconds>(t1-t0).count();
-              stats_.total_candidates=(uint32_t)all.size();stats_.auto_patchable=(uint32_t)std::count_if(all.begin(),all.end(),[](const ScanCandidate&c){return c.auto_patchable;});
-              stats_.float_candidates=(uint32_t)std::count_if(all.begin(),all.end(),[](const ScanCandidate&c){return c.pattern=="P4-float";});
-              stats_.gte_candidates=(uint32_t)std::count_if(all.begin(),all.end(),[](const ScanCandidate&c){return c.pattern=="P5-GTE-flag";});
-              return all; }
-          PatchManifest MipsPatternScanner::to_manifest(const std::vector<ScanCandidate>& candidates,const ExecutableSignature& exe_sig,const std::string& display_name) const {
-              PatchManifest m;m.exe_signature=exe_sig;m.display_name=display_name+" (auto-discovered)";m.recommend_8mb_ram=false;int idx=0;
-              for(const auto& c:candidates){if(!c.auto_patchable)continue;if(++idx>30)break;PatchEntry pe;
-                  char nm[128];std::snprintf(nm,sizeof(nm),"candidate_%d_%s_addr_%08X",idx,c.pattern.c_str(),c.address);pe.name=nm;
-                  char dc[256];std::snprintf(dc,sizeof(dc),"%s|original_value=%d|maxed_to=32767",c.disasm.c_str(),c.value);pe.description=dc;
-                  char ph[32];std::snprintf(ph,sizeof(ph),"%02X %02X %02X %02X",c.orig_bytes[0],c.orig_bytes[1],c.orig_bytes[2],c.orig_bytes[3]);pe.pattern_hex=ph;
-                  char rh[32];std::snprintf(rh,sizeof(rh),"%02X %02X %02X %02X",c.patch_bytes[0],c.patch_bytes[1],c.patch_bytes[2],c.patch_bytes[3]);pe.replacement_hex=rh;
-                  pe.category=(c.value<500)?PatchEntry::Category::StreamingBudget:PatchEntry::Category::LodDistance;pe.requires_8mb=(c.value>200);if(pe.requires_8mb)m.recommend_8mb_ram=true;
-                  m.patches.push_back(std::move(pe));}
-              return m; }
-          }  // namespace rsil
-          '''
-          wr("rsil/src/MipsPatternScanner.cpp", mips)
-          print("D3: MipsPatternScanner.cpp written")
-
-          # === D10: json_escape in RSILSubsystem.cpp ===
-          f = rd("rsil/src/RSILSubsystem.cpp")
-          if "json_escape" not in f:
-              f = f.replace("namespace rsil {",
-                  'namespace {\nstd::string json_escape(const std::string& s) {\n    std::string out; out.reserve(s.size()+8);\n    for (char c : s) {\n        switch (c) {\n            case \'"\': out += "\\\\""; break;\n            case \'\\\\\': out += "\\\\\\\\"; break;\n            case \'\\n\': out += "\\\\n"; break;\n            default: out += c;\n        }\n    }\n    return out;\n}\n} // namespace\n\nnamespace rsil {', 1)
-              f = f.replace("<< manifest.display_name <<", "<< json_escape(manifest.display_name) <<")
-              f = f.replace("<< p.name <<", "<< json_escape(p.name) <<")
-              f = f.replace("<< p.description <<", "<< json_escape(p.description) <<")
-              f = f.replace("<< p.pattern_hex <<", "<< json_escape(p.pattern_hex) <<")
-              f = f.replace("<< p.replacement_hex <<", "<< json_escape(p.replacement_hex) <<")
-              wr("rsil/src/RSILSubsystem.cpp", f)
-              print("D10: json_escape added")
-
-          # === Fix set_emulation_mode to apply auto-discovered manifests ===
-          f = rd("rsil/src/RSILSubsystem.cpp")
-          if "Apply the manifest" not in f:
-              old = re.search(r'void RSILSubsystem::set_emulation_mode\(.*?^}', f, re.DOTALL|re.MULTILINE)
-              if old:
-                  new = '''void RSILSubsystem::set_emulation_mode(EmulationMode mode, RamAccess* ram, const std::filesystem::path& patches_dir) {
-              if (mode == mode_) return;
-              if (mode == EmulationMode::Enhanced) {
-                  if (!ram) return;
-                  ram_access_ = ram;
-                  if (!patches_dir.empty()) {
-                      auto mp = find_manifest_for_exe(patches_dir, exe_);
-                      if (!mp.empty()) epl_.load_manifest(mp);
-                  }
-                  // Apply the manifest
-                  if (epl_.has_manifest() && !epl_.is_applied()) {
-                      epl_.apply(*ram_access_);
-                  }
-                  mode_ = EmulationMode::Enhanced;
-              } else {
-                  if (epl_.is_applied() && ram_access_) epl_.revert(*ram_access_);
-                  ram_access_ = nullptr;
-                  mode_ = EmulationMode::Deterministic;
-              }
-          }'''
-                  f = f[:old.start()] + new + f[old.end():]
-                  wr("rsil/src/RSILSubsystem.cpp", f)
-                  print("set_emulation_mode fixed")
-
-          # === D12: desync watchdog in GpuPacketParser.cpp ===
-          f = rd("rsil/src/GpuPacketParser.cpp")
-          if "desync watchdog" not in f:
-              f = f.replace("stats_.words_consumed++;\n",
-                  "stats_.words_consumed++;\n    // D12 fix: desync watchdog\n    if (state_ == State::Accumulating && packet_words_.size() >= 16) {\n        stats_.desyncs++; state_ = State::Idle; packet_words_.clear(); words_expected_ = 0; pending_cmd_ = 0;\n    }\n", 1)
-              wr("rsil/src/GpuPacketParser.cpp", f)
-              print("D12: watchdog added")
-
-          # === D13: restore() in ClusterSignature.h + .cpp ===
-          h = rd("rsil/include/rsil/ClusterSignature.h")
-          if "void restore" not in h:
-              h = h.replace("std::vector<SignatureEntry> snapshot() const;",
-                  "std::vector<SignatureEntry> snapshot() const;\n    void restore(const std::vector<SignatureEntry>& entries);", 1)
-              wr("rsil/include/rsil/ClusterSignature.h", h)
-          c = rd("rsil/src/ClusterSignature.cpp")
-          if "SignatureRegistry::restore" not in c:
-              c = c.replace("void SignatureRegistry::clear() { entries_.clear(); }",
-                  "void SignatureRegistry::clear() { entries_.clear(); }\n\nvoid SignatureRegistry::restore(const std::vector<SignatureEntry>& entries) {\n    entries_.clear(); entries_.reserve(entries.size());\n    for (const auto& e : entries) { if (e.id == kInvalidSignature) continue; entries_.emplace(e.id, e); }\n}", 1)
-              wr("rsil/src/ClusterSignature.cpp", c)
-              print("D13: restore added")
-
-          # === Fix test_mips_scanner.cpp (bne → beq) ===
-          f = rd("rsil/tests/test_mips_scanner.cpp")
-          f = f.replace("uint32_t bne  = (0x05 << 26) | (8 << 21) | (0 << 16) | 4;",
-                        "uint32_t beq  = (0x04 << 26) | (8 << 21) | (0 << 16) | 4;")
-          f = f.replace("emit_word(code, bne);", "emit_word(code, beq);")
-          wr("rsil/tests/test_mips_scanner.cpp", f)
-
-          # === DuckStation hooks ===
-          DS = "duckstation"
-
-          # system.h
-          patch(f"{DS}/src/core/system.h", "bool IsReplayingGPUDump();",
-                "// RSIL\nnamespace rsil { class RSILSubsystem; }\nrsil::RSILSubsystem* GetRSIL();")
-
-          # system.cpp includes
-          patch(f"{DS}/src/core/system.cpp", '#include "gpu_dump.h"',
-                '// RSIL\n#include "rsil/RSILSubsystem.h"\n#include "rsil/Config.h"\n#include "duckstation/DuckStationHostAdapter.h"\n#include "gpu_dump.h"', after=False)
-          # s_state member
-          c = rd(f"{DS}/src/core/system.cpp")
-          if "std::unique_ptr<rsil::RSILSubsystem> rsil;" not in c:
-              c = c.replace("u32 frame_number = 0;", "u32 frame_number = 0;\n  std::unique_ptr<rsil::RSILSubsystem> rsil;", 1)
-              wr(f"{DS}/src/core/system.cpp", c)
-          # GetRSIL
-          patch(f"{DS}/src/core/system.cpp", "return s_state.frame_number;",
-                "return s_state.frame_number;\n}\n\nrsil::RSILSubsystem* System::GetRSIL()\n{\n  return s_state.rsil.get();")
-          # Initialize
-          patch(f"{DS}/src/core/system.cpp", "s_state.state = State::Running;",
-                's_state.state = State::Running;\n  // RSIL\n  if (!s_state.rsil) {\n    rsil::RSILConfig cfg = rsil::RSILConfig::defaults();\n    static rsil::DuckStationHostAdapter s_host;\n    s_state.rsil = rsil::RSILSubsystem::create(std::move(cfg), s_host, nullptr, nullptr);\n  }\n  if (s_state.rsil) {\n    s_state.rsil->set_scan_deferred(true);\n    GTE::SetRSILZScale(0.5f);\n    GTE::SetRSILZScaleActive(true);')
-          # DestroySystem
-          c = rd(f"{DS}/src/core/system.cpp")
-          if "s_state.rsil.reset()" not in c:
-              c = c.replace("void System::DestroySystem()\n{", "void System::DestroySystem()\n{\n  s_state.rsil.reset();", 1)
-              wr(f"{DS}/src/core/system.cpp", c)
-          # FrameDone with pump + scan + auto-activation
-          c = rd(f"{DS}/src/core/system.cpp")
-          if "RSIL: Auto-activate Enhanced mode" not in c:
-              c = c.replace("void System::FrameDone()\n{",
-                'void System::FrameDone()\n{\n  // RSIL: Auto-activate Enhanced mode after scan finds patches.\n  if (s_state.rsil) [[unlikely]]\n  {\n    s_state.rsil->Pump(s_state.frame_number);\n    if (s_state.rsil->scan_deferred() && Bus::g_ram && Bus::g_ram_size > 0)\n    {\n      if (Bus::g_ram_code_bits.any())\n      {\n        std::vector<u8> snap(Bus::g_ram, Bus::g_ram + std::min<u32>(Bus::g_ram_size, 0x200000));\n        s_state.rsil->auto_discover_patches(snap);\n        s_state.rsil->set_scan_deferred(false);\n        if (s_state.rsil->scan_stats().total_candidates > 0)\n        {\n          static rsil::DuckStationRamAccess s_ram;\n          s_state.rsil->set_emulation_mode(rsil::EmulationMode::Enhanced, &s_ram, "");\n        }\n      }\n    }\n  }', 1)
-              wr(f"{DS}/src/core/system.cpp", c)
-              print("system.cpp: FrameDone patched with Auto-activate Enhanced mode")
-
-          # gpu.cpp
-          patch(f"{DS}/src/core/gpu.cpp", '#include "video_thread_commands.h"',
-                '#include "video_thread_commands.h"\n// RSIL\n#include "rsil/RSILSubsystem.h"', after=False)
-          c = rd(f"{DS}/src/core/gpu.cpp")
-          if "RSIL: tap GP0" not in c:
-              c = c.replace("s_locals.fifo.Push(value);\n      ExecuteCommands();",
-                "s_locals.fifo.Push(value);\n      // RSIL: tap GP0\n      if (rsil::RSILSubsystem* rs = System::GetRSIL()) [[unlikely]]\n        rs->GetTap().emit_gpu_command(0, value, System::GetFrameNumber());\n      ExecuteCommands();", 1)
-              wr(f"{DS}/src/core/gpu.cpp", c)
-
-          # imgui_overlays.cpp
-          patch(f"{DS}/src/core/imgui_overlays.cpp", '#include "system.h"',
-                '#include "system.h"\n// RSIL\n#include "rsil/RSILSubsystem.h"', after=False)
-          c = rd(f"{DS}/src/core/imgui_overlays.cpp")
-          if "RSIL: draw overlay" not in c:
-              c = c.replace("void ImGuiManager::RenderDebugWindows()\n{",
-                "void ImGuiManager::RenderDebugWindows()\n{\n  // RSIL: draw overlay\n  if (System::IsValid() && System::GetRSIL())\n    System::GetRSIL()->DrawOverlay();", 1)
-              wr(f"{DS}/src/core/imgui_overlays.cpp", c)
-
-          # gte.h
-          patch(f"{DS}/src/core/gte.h", "} // namespace GTE",
-                "// RSIL: GTE Z-scale\nvoid SetRSILZScale(float scale);\nvoid SetRSILZScaleActive(bool active);\n} // namespace GTE")
-
-          # gte.cpp
-          c = rd(f"{DS}/src/core/gte.cpp")
-          if "SetRSILZScale" not in c:
-              c = c.replace("} // namespace GTE",
-                "// RSIL: GTE Z-scale\nstatic float s_rsil_zs = 1.0f; static bool s_rsil_zs_a = false;\nvoid GTE::SetRSILZScale(float s) { s_rsil_zs = s; }\nvoid GTE::SetRSILZScaleActive(bool a) { s_rsil_zs_a = a; }\n} // namespace GTE", 1)
-              wr(f"{DS}/src/core/gte.cpp", c)
-
-          print("=== ALL PATCHES APPLIED ===")
-
-          PYEND
-          grep -q "Auto-activate Enhanced mode" duckstation/src/core/system.cpp && echo "Auto-activation: OK"
-          grep -q "SetRSILZScale" duckstation/src/core/gte.cpp && echo "GTE Z-scale: OK"
-          grep -q "tap GP0" duckstation/src/core/gpu.cpp && echo "GP0 tap: OK"
-
-      - name: Copy RSIL + download deps
-        shell: bash
+      - name: Apply patch
         run: |
-          mkdir -p duckstation/dep/rsil && cp -r rsil/* duckstation/dep/rsil/
-          curl -sL -o deps.7z "https://github.com/duckstation/dependencies/releases/download/$DEPS_TAG/deps-windows-x64.7z"
-          mkdir -p duckstation/dep/prebuilt && 7z x deps.7z -oduckstation/dep/prebuilt -y
+          cd DuckStation
+          git apply ..\duckstation-sie.patch
+          python -c "p='src/duckstation-qt/duckstation-qt.vcxproj';f=open(p,'r');c=f.read();f.close();c=c.replace('<ClCompile Include=\"settingswindow.cpp\" />','<ClCompile Include=\"settingswindow.cpp\" />\n    <ClCompile Include=\"sisesettingswidget.cpp\" />');c=c.replace('<QtMoc Include=\"settingswindow.h\" />','<QtMoc Include=\"settingswindow.h\" />\n    <QtMoc Include=\"sisesettingswidget.h\" />');f=open(p,'w');f.write(c);f.close()"
+        shell: cmd
 
-      - name: Generate rsil.vcxproj + patch .sln + core.vcxproj
-        shell: bash
+      - name: Deps
         run: |
-          cat > duckstation/dep/rsil/rsil.vcxproj << 'XMLEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-            <Import Project="..\vsprops\Configurations.props" />
-            <ItemGroup>
-              <ClCompile Include="src\AdjacencyGraph.cpp" /><ClCompile Include="src\ClusterSignature.cpp" />
-              <ClCompile Include="src\DebugOverlay.cpp" /><ClCompile Include="src\GpuPacketParser.cpp" />
-              <ClCompile Include="src\HeadlessPrePass.cpp" /><ClCompile Include="src\HostPreRegistrar.cpp" />
-              <ClCompile Include="src\MipsPatternScanner.cpp" /><ClCompile Include="src\Persistence.cpp" />
-              <ClCompile Include="src\Predictor.cpp" /><ClCompile Include="src\RSILSubsystem.cpp" />
-              <ClCompile Include="src\ScenePatchLayer.cpp" /><ClCompile Include="src\SpatialCatalog.cpp" />
-              <ClCompile Include="src\TelemetryTap.cpp" /><ClCompile Include="src\Validator.cpp" />
-              <ClCompile Include="integration\duckstation\DuckStationHostAdapter.cpp" />
-              <ClCompile Include="integration\duckstation\DuckStationHashProvider.cpp" />
-            </ItemGroup>
-            <PropertyGroup Label="Globals"><ProjectGuid>${{ env.RSIL_GUID }}</ProjectGuid></PropertyGroup>
-            <Import Project="..\vsprops\StaticLibrary.props" />
-            <ItemDefinitionGroup><ClCompile>
-              <AdditionalIncludeDirectories>$(ProjectDir)\include;$(SolutionDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-              <PreprocessorDefinitions>RSIL_DUCKSTATION_INTEGRATED;RSIL_HAS_SQLITE=1;RSIL_HAS_IMGUI=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-              <LanguageStandard>stdcpp20</LanguageStandard><ConformanceMode>false</ConformanceMode>
-              <DisableSpecificWarnings>4244;4267;4146;4458;4324</DisableSpecificWarnings>
-            </ClCompile></ItemDefinitionGroup>
-            <Import Project="..\vsprops\Targets.props" />
-          </Project>
-          XMLEOF
-          python3 << 'PYEND'
-          import re, os
-          guid = os.environ.get("RSIL_GUID", "")
-          with open("duckstation/duckstation.sln","r") as f: sln = f.read()
-          if "rsil.vcxproj" not in sln:
-              pe = '\nProject("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rsil", "dep\rsil\rsil.vcxproj", "' + guid + '"\nEndProject\n'
-              sln = re.sub(r'(Project\([^}]+\{BA490C0E[^}]+\}[^)]*\)[^\n]*\nEndProject)', lambda m: m.group(1) + pe, sln)
-              cfg = "\t" + guid + ".Debug|x64.ActiveCfg = Debug|x64\n\t" + guid + ".Debug|x64.Build.0 = Debug|x64\n\t" + guid + ".Release|x64.ActiveCfg = Release|x64\n\t" + guid + ".Release|x64.Build.0 = Release|x64\n"
-              sln = re.sub(r"(GlobalSection\(ProjectConfigurationPlatforms\)[^\n]*\n)", lambda m: m.group(1) + cfg, sln)
-              with open("duckstation/duckstation.sln","w") as f: f.write(sln)
-              print(".sln patched")
-          with open("duckstation/src/core/core.vcxproj","r") as f: p = f.read()
-          if "rsil" not in p:
-              p = re.sub(r'(<AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);\$\(SolutionDir\)dep\\fast_float\\include;)', lambda m: m.group(1) + r'$(SolutionDir)dep\rsil\include;', p)
-              p = re.sub(r'(<ProjectReference Include="\.\.\\\.\.\\dep\\xxhash\\xxhash\.vcxproj">\s*</ProjectReference>)', lambda m: m.group(1) + r'<ProjectReference Include="..\\..\\dep\\rsil\\rsil.vcxproj"></ProjectReference>', p)
-              with open("duckstation/src/core/core.vcxproj","w") as f: f.write(p)
-              print("core.vcxproj patched")
-          PYEND
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+          cd DuckStation
+          set /p V=<dep\PREBUILT-VERSION
+          curl -L -o d.7z "https://github.com/duckstation/dependencies/releases/download/%V%/deps-windows-x64.7z"
+          7z x d.7z -o"dep\prebuilt" -y
+          mkdir dep\zlib\include 2>nul
+          copy dep\prebuilt\windows-x64\include\zlib.h dep\zlib\include\
+          copy dep\prebuilt\windows-x64\include\zconf.h dep\zlib\include\
+        shell: cmd
 
       - name: Build
-        shell: cmd
-        run: msbuild "duckstation\duckstation.sln" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /v:minimal
-
-      - name: Package with Qt plugins
-        shell: bash
         run: |
-          set -e
-          PKG="duckstation-rsil-windows-x64"
-          rm -rf "$PKG"; mkdir -p "$PKG"
-          BIN=""
-          for c in "duckstation/build/Release-x64/bin" "duckstation/bin/Release" "duckstation/bin"; do
-            [ -f "$c/duckstation-qt.exe" ] && BIN="$c" && break
-          done
-          [ -z "$BIN" ] && BIN=$(find duckstation -name "duckstation-qt.exe" -printf '%h' -quit)
-          [ -z "$BIN" ] && echo "ERROR: exe not found" && exit 1
-          cp "$BIN"/*.exe "$PKG/" 2>/dev/null; cp "$BIN"/*.dll "$PKG/" 2>/dev/null
-          WDQ=$(find "$BIN" duckstation/dep/prebuilt -name "windeployqt.exe" -print -quit 2>/dev/null)
-          [ -n "$WDQ" ] && "$WDQ" --release --no-translations --no-system-d3d-compiler --no-opengl-sw "$PKG/duckstation-qt.exe"
-          QTP=""
-          for c in "$BIN/Qt6/plugins" "$BIN/plugins" "duckstation/dep/prebuilt/windows-x64/Qt6/plugins" "duckstation/dep/prebuilt/windows-x64/plugins"; do
-            [ -f "$c/platforms/qwindows.dll" ] && QTP="$c" && break
-          done
-          if [ -n "$QTP" ]; then
-            for sub in platforms imageformats mediaservice styles tls networkinformation iconengines platforminputcontexts renderers; do
-              [ -d "$QTP/$sub" ] && cp -r "$QTP/$sub" "$PKG/$sub"
-            done
-          fi
-          [ -f "duckstation/dep/prebuilt/windows-x64/bin/Qt6Core.dll" ] && cp duckstation/dep/prebuilt/windows-x64/bin/Qt6*.dll "$PKG/" 2>/dev/null
-          [ -d "duckstation/data" ] && cp -r duckstation/data "$PKG/"
-          mkdir -p "$PKG/settings"
-          printf '[RSIL]\nTelemetry = true\nGraph = true\nPredictor = true\nPreRegister = true\nOverlay = false\nPersistence = true\nValidator = false\n' > "$PKG/settings/rsil.ini"
-          [ -f "$PKG/platforms/qwindows.dll" ] && echo "OK: qwindows.dll present" || echo "WARN: qwindows.dll missing"
-          powershell -Command "Compress-Archive -Path '$PKG/*' -DestinationPath 'duckstation-rsil-windows-x64.zip'"
-          ls -la duckstation-rsil-windows-x64.zip
+          cd DuckStation
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" duckstation.sln /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /m
+        shell: powershell
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Package
+        run: |
+          echo. > DuckStation\bin\x64\portable.txt
+          echo [sise] > DuckStation\bin\x64\settings.ini
+          echo enabled=true >> DuckStation\bin\x64\settings.ini
+          echo z_scale_factor=4.0 >> DuckStation\bin\x64\settings.ini
+          echo show_overlay=true >> DuckStation\bin\x64\settings.ini
+          7z a sie.7z DuckStation\bin\x64\*
+        shell: cmd
+
+      - uses: actions/upload-artifact@v5
         with:
-          name: duckstation-rsil-windows-x64
-          path: duckstation-rsil-windows-x64.zip
-          retention-days: 90
+          name: sie-duckstation
+          path: sie.7z
