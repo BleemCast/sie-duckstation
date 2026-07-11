@@ -383,11 +383,11 @@ jobs:
               with open("duckstation/duckstation.sln","w") as f: f.write(sln)
               print(".sln patched")
           with open("duckstation/src/core/core.vcxproj","r") as f: p = f.read()
-if "rsil" not in p:
-    p = p.replace("dep\\fast_float\\include;", "dep\\fast_float\\include;$(SolutionDir)dep\\rsil\\include;")
-    p = p.replace("</ProjectReference>", '</ProjectReference>\n    <ProjectReference Include="..\\..\\dep\\rsil\\rsil.vcxproj"></ProjectReference>', 1)
-    with open("duckstation/src/core/core.vcxproj","w") as f: f.write(p)
-    print("core.vcxproj patched")
+          if "rsil" not in p:
+              p = p.replace("dep\\fast_float\\include;", "dep\\fast_float\\include;$(SolutionDir)dep\\rsil\\include;")
+              p = p.replace("</ProjectReference>", '</ProjectReference>\n    <ProjectReference Include="..\\..\\dep\\rsil\\rsil.vcxproj"></ProjectReference>', 1)
+              with open("duckstation/src/core/core.vcxproj","w") as f: f.write(p)
+              print("core.vcxproj patched")
           PYEND
 
       - name: Setup MSBuild
