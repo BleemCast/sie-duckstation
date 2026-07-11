@@ -29,6 +29,12 @@ jobs:
           python -c "p='src/duckstation-qt/duckstation-qt.vcxproj';f=open(p,'r');c=f.read();f.close();c=c.replace('<ClCompile Include=\"settingswindow.cpp\" />','<ClCompile Include=\"settingswindow.cpp\" />\n    <ClCompile Include=\"sisesettingswidget.cpp\" />');c=c.replace('<QtMoc Include=\"settingswindow.h\" />','<QtMoc Include=\"settingswindow.h\" />\n    <QtMoc Include=\"sisesettingswidget.h\" />');f=open(p,'w');f.write(c);f.close()"
         shell: cmd
 
+      - name: Apply recompiler Z-scaling patch
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.check_call([sys.executable, "patch_recompiler.py"])
+
       - name: Deps
         run: |
           cd DuckStation
