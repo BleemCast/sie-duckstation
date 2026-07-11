@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          cp rsil-repo/rsil-source.tar rsil.tar 2>/dev/null || curl -sL -o rsil.tar "https://github.com/BleemCast/sie-duckstation/raw/main/rsil-source.tar"
+          cp rsil-repo/rsil-source.tar rsil.tar
           mkdir -p rsil && tar xf rsil.tar -C rsil && rm rsil.tar
           echo "RSIL: $(find rsil -name '*.cpp' -o -name '*.h' | wc -l) files"
           grep -q "analyze_branch_safety" rsil/src/MipsPatternScanner.cpp && echo "D3: OK" || exit 1
@@ -346,45 +346,71 @@ jobs:
         shell: bash
         run: |
           cat > duckstation/dep/rsil/rsil.vcxproj << 'XMLEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-            <Import Project="..\vsprops\Configurations.props" />
-            <ItemGroup>
-              <ClCompile Include="src\AdjacencyGraph.cpp" /><ClCompile Include="src\ClusterSignature.cpp" />
-              <ClCompile Include="src\DebugOverlay.cpp" /><ClCompile Include="src\GpuPacketParser.cpp" />
-              <ClCompile Include="src\HeadlessPrePass.cpp" /><ClCompile Include="src\HostPreRegistrar.cpp" />
-              <ClCompile Include="src\MipsPatternScanner.cpp" /><ClCompile Include="src\Persistence.cpp" />
-              <ClCompile Include="src\Predictor.cpp" /><ClCompile Include="src\RSILSubsystem.cpp" />
-              <ClCompile Include="src\ScenePatchLayer.cpp" /><ClCompile Include="src\SpatialCatalog.cpp" />
-              <ClCompile Include="src\TelemetryTap.cpp" /><ClCompile Include="src\Validator.cpp" />
-              <ClCompile Include="integration\duckstation\DuckStationHostAdapter.cpp" />
-              <ClCompile Include="integration\duckstation\DuckStationHashProvider.cpp" />
-            </ItemGroup>
-            <PropertyGroup Label="Globals"><ProjectGuid>${{ env.RSIL_GUID }}</ProjectGuid></PropertyGroup>
-            <Import Project="..\vsprops\StaticLibrary.props" />
-            <ItemDefinitionGroup><ClCompile>
-              <AdditionalIncludeDirectories>$(ProjectDir)\include;$(SolutionDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-              <PreprocessorDefinitions>RSIL_DUCKSTATION_INTEGRATED;RSIL_HAS_SQLITE=1;RSIL_HAS_IMGUI=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-              <LanguageStandard>stdcpp20</LanguageStandard><ConformanceMode>false</ConformanceMode>
-              <DisableSpecificWarnings>4244;4267;4146;4458;4324</DisableSpecificWarnings>
-            </ClCompile></ItemDefinitionGroup>
-            <Import Project="..\vsprops\Targets.props" />
-          </Project>
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\vsprops\Configurations.props" />
+  <ItemGroup>
+    <ClCompile Include="src\AdjacencyGraph.cpp" /><ClCompile Include="src\ClusterSignature.cpp" />
+    <ClCompile Include="src\DebugOverlay.cpp" /><ClCompile Include="src\GpuPacketParser.cpp" />
+    <ClCompile Include="src\HeadlessPrePass.cpp" /><ClCompile Include="src\HostPreRegistrar.cpp" />
+    <ClCompile Include="src\MipsPatternScanner.cpp" /><ClCompile Include="src\Persistence.cpp" />
+    <ClCompile Include="src\Predictor.cpp" /><ClCompile Include="src\RSILSubsystem.cpp" />
+    <ClCompile Include="src\ScenePatchLayer.cpp" /><ClCompile Include="src\SpatialCatalog.cpp" />
+    <ClCompile Include="src\TelemetryTap.cpp" /><ClCompile Include="src\Validator.cpp" />
+    <ClCompile Include="integration\duckstation\DuckStationHostAdapter.cpp" />
+    <ClCompile Include="integration\duckstation\DuckStationHashProvider.cpp" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals"><ProjectGuid>${{ env.RSIL_GUID }}</ProjectGuid></PropertyGroup>
+  <Import Project="..\vsprops\StaticLibrary.props" />
+  <ItemDefinitionGroup><ClCompile>
+    <AdditionalIncludeDirectories>$(ProjectDir)\include;$(SolutionDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    <PreprocessorDefinitions>RSIL_DUCKSTATION_INTEGRATED;RSIL_HAS_SQLITE=1;RSIL_HAS_IMGUI=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    <LanguageStandard>stdcpp20</LanguageStandard><ConformanceMode>false</ConformanceMode>
+    <DisableSpecificWarnings>4244;4267;4146;4458;4324</DisableSpecificWarnings>
+  </ClCompile></ItemDefinitionGroup>
+  <Import Project="..\vsprops\Targets.props" />
+</Project>
           XMLEOF
           python3 << 'PYEND'
-          import re, os
-          guid = os.environ.get("RSIL_GUID", "")
-          with open("duckstation/duckstation.sln","r") as f: sln = f.read()
-          if "rsil.vcxproj" not in sln:
-              pe = '\nProject("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rsil", "dep\rsil\rsil.vcxproj", "' + guid + '"\nEndProject\n'
-              sln = re.sub(r'(Project\([^}]+\{BA490C0E[^}]+\}[^)]*\)[^\n]*\nEndProject)', lambda m: m.group(1) + pe, sln)
-          cfg = ""
-          for c in ["Debug|ARM64","Debug|x64","Debug-Clang|ARM64","Debug-Clang|x64","Debug-Clang-SSE2|ARM64","Debug-Clang-SSE2|x64","DebugFast|ARM64","DebugFast|x64","DebugFast-Clang|ARM64","DebugFast-Clang|x64","Devel-Clang|ARM64","Devel-Clang|x64","Release|ARM64","Release|x64","Release-Clang|ARM64","Release-Clang|x64","ReleaseLTCG|ARM64","ReleaseLTCG|x64","ReleaseLTCG-Clang|ARM64","ReleaseLTCG-Clang|x64"]:
-              config, plat = c.split("|")
-              target = "Debug|x64" if ("Debug" in config or "Devel" in config) else "Release|x64"
-              cfg += "\t" + guid + "." + c + ".ActiveCfg = " + target + "\n"
-              if plat == "x64":
-                  cfg += "\t" + guid + "." + c + ".Build.0 = " + target + "\n"
+import re, os
+guid = os.environ.get("RSIL_GUID", "")
+# Patch .sln — add rsil project with ALL config mappings
+with open("duckstation/duckstation.sln","r") as f: sln = f.read()
+if "rsil.vcxproj" not in sln:
+    pe = '\nProject("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rsil", "dep\rsil\rsil.vcxproj", "' + guid + '"\nEndProject\n'
+    sln = re.sub(r'(Project\([^}]+\{BA490C0E[^}]+\}[^)]*\)[^\n]*\nEndProject)', lambda m: m.group(1) + pe, sln)
+    # Build cfg for ALL solution configurations
+    cfg = ""
+    for c in ["Debug|ARM64","Debug|x64","Debug-Clang|ARM64","Debug-Clang|x64","Debug-Clang-SSE2|ARM64","Debug-Clang-SSE2|x64","DebugFast|ARM64","DebugFast|x64","DebugFast-Clang|ARM64","DebugFast-Clang|x64","Devel-Clang|ARM64","Devel-Clang|x64","Release|ARM64","Release|x64","Release-Clang|ARM64","Release-Clang|x64","ReleaseLTCG|ARM64","ReleaseLTCG|x64","ReleaseLTCG-Clang|ARM64","ReleaseLTCG-Clang|x64"]:
+        config, plat = c.split("|")
+        target = "Debug|x64" if ("Debug" in config or "Devel" in config) else "Release|x64"
+        cfg += "\t" + guid + "." + c + ".ActiveCfg = " + target + "\n"
+        if plat == "x64":
+            cfg += "\t" + guid + "." + c + ".Build.0 = " + target + "\n"
+    sln = re.sub(r"(GlobalSection\(ProjectConfigurationPlatforms\)[^\n]*\n)", lambda m: m.group(1) + cfg, sln)
+    with open("duckstation/duckstation.sln","w") as f: f.write(sln)
+    print(".sln patched")
+# Patch core.vcxproj — add RSIL include path + ProjectReference
+with open("duckstation/src/core/core.vcxproj","r") as f: p = f.read()
+if "rsil" not in p:
+    p = p.replace("dep\fast_float\include;", "dep\fast_float\include;$(SolutionDir)dep\rsil\include;")
+    p = p.replace("</ProjectReference>", '</ProjectReference>\n    <ProjectReference Include="..\..\dep\rsil\rsil.vcxproj"></ProjectReference>', 1)
+    with open("duckstation/src/core/core.vcxproj","w") as f: f.write(p)
+    print("core.vcxproj patched")
+PYEND
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build
+        shell: cmd
+        run: msbuild "duckstation\duckstation.sln" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /v:minimal
+
+      - name: Package with Qt plugins
+        shell: bash
+        run: |
+          set -e
+          PKG="duckstation-rsil-windows-x64"
           rm -rf "$PKG"; mkdir -p "$PKG"
           BIN=""
           for c in "duckstation/build/Release-x64/bin" "duckstation/bin/Release" "duckstation/bin"; do
@@ -400,7 +426,7 @@ jobs:
             [ -f "$c/platforms/qwindows.dll" ] && QTP="$c" && break
           done
           if [ -n "$QTP" ]; then
-          for sub in platforms imageformats mediaservice styles tls networkinformation iconengines platforminputcontexts renderers; do
+            for sub in platforms imageformats mediaservice styles tls networkinformation iconengines platforminputcontexts renderers; do
               [ -d "$QTP/$sub" ] && cp -r "$QTP/$sub" "$PKG/$sub"
             done
           fi
@@ -412,9 +438,9 @@ jobs:
           powershell -Command "Compress-Archive -Path '$PKG/*' -DestinationPath 'duckstation-rsil-windows-x64.zip'"
           ls -la duckstation-rsil-windows-x64.zip
 
-          - name: Upload artifact
-          uses: actions/upload-artifact@v4
-          with:
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
           name: duckstation-rsil-windows-x64
           path: duckstation-rsil-windows-x64.zip
           retention-days: 90
