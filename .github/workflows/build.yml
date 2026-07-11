@@ -373,15 +373,15 @@ jobs:
           with open("duckstation/duckstation.sln","r") as f: sln = f.read()
           if "rsil.vcxproj" not in sln:
               pe = '\nProject("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rsil", "dep\rsil\rsil.vcxproj", "' + guid + '"\nEndProject\n'
-              sln = re.sub(r'(Project\([^}]+\{BA490C0E[^}]+\}[^)]*\)[^\n]*\nEndProject)', r"\1" + pe, sln)
+              sln = re.sub(r'(Project\([^}]+\{BA490C0E[^}]+\}[^)]*\)[^\n]*\nEndProject)', lambda m: m.group(1) + pe, sln)
               cfg = "\t" + guid + ".Debug|x64.ActiveCfg = Debug|x64\n\t" + guid + ".Debug|x64.Build.0 = Debug|x64\n\t" + guid + ".Release|x64.ActiveCfg = Release|x64\n\t" + guid + ".Release|x64.Build.0 = Release|x64\n"
-              sln = re.sub(r"(GlobalSection\(ProjectConfigurationPlatforms\)[^\n]*\n)", r"\1" + cfg, sln)
+              sln = re.sub(r"(GlobalSection\(ProjectConfigurationPlatforms\)[^\n]*\n)", lambda m: m.group(1) + cfg, sln)
               with open("duckstation/duckstation.sln","w") as f: f.write(sln)
               print(".sln patched")
           with open("duckstation/src/core/core.vcxproj","r") as f: p = f.read()
           if "rsil" not in p:
-              p = re.sub(r'(<AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);\$\(SolutionDir\)dep\\fast_float\\include;)', r"\1$(SolutionDir)dep\rsil\include;", p)
-              p = re.sub(r'(<ProjectReference Include="\.\.\\\.\.\\dep\\xxhash\\xxhash\.vcxproj">\s*</ProjectReference>)', r'\1<ProjectReference Include="..\\..\\dep\\rsil\\rsil.vcxproj"></ProjectReference>', p)
+              p = re.sub(r'(<AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);\$\(SolutionDir\)dep\\fast_float\\include;)', lambda m: m.group(1) + r'$(SolutionDir)dep\rsil\include;', p)
+              p = re.sub(r'(<ProjectReference Include="\.\.\\\.\.\\dep\\xxhash\\xxhash\.vcxproj">\s*</ProjectReference>)', lambda m: m.group(1) + r'<ProjectReference Include="..\\..\\dep\\rsil\\rsil.vcxproj"></ProjectReference>', p)
               with open("duckstation/src/core/core.vcxproj","w") as f: f.write(p)
               print("core.vcxproj patched")
           PYEND
@@ -390,8 +390,8 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Build
-        shell: bash
-        run: msbuild "duckstation/duckstation.sln" /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+        shell: cmd
+        run: msbuild "duckstation\duckstation.sln" /p:Configuration=Release /p:Platform=x64 /m /v:minimal
 
       - name: Package with Qt plugins
         shell: bash
