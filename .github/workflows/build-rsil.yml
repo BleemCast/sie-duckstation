@@ -378,30 +378,13 @@ jobs:
           if "rsil.vcxproj" not in sln:
               pe = '\nProject("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rsil", "dep\rsil\rsil.vcxproj", "' + guid + '"\nEndProject\n'
               sln = re.sub(r'(Project\([^}]+\{BA490C0E[^}]+\}[^)]*\)[^\n]*\nEndProject)', lambda m: m.group(1) + pe, sln)
-              cfg = "\t" + guid + ".Debug|ARM64.ActiveCfg = Debug|x64\n"\t" + guid + ".Debug|x64.ActiveCfg = Debug|x64\n"\t" + guid + ".Debug|x64.Build.0 = Debug|x64\n"\t" + guid + ".Debug-Clang|ARM64.ActiveCfg = Debug|x64\n"\t" + guid + ".Debug-Clang|x64.ActiveCfg = Debug|x64\n"\t" + guid + ".Debug-Clang|x64.Build.0 = Debug|x64\n"\t" + guid + ".Debug-Clang-SSE2|ARM64.ActiveCfg = Debug|x64\n"\t" + guid + ".Debug-Clang-SSE2|x64.ActiveCfg = Debug|x64\n"\t" + guid + ".Debug-Clang-SSE2|x64.Build.0 = Debug|x64\n"\t" + guid + ".DebugFast|ARM64.ActiveCfg = Debug|x64\n"\t" + guid + ".DebugFast|x64.ActiveCfg = Debug|x64\n"\t" + guid + ".DebugFast|x64.Build.0 = Debug|x64\n"\t" + guid + ".DebugFast-Clang|ARM64.ActiveCfg = Debug|x64\n"\t" + guid + ".DebugFast-Clang|x64.ActiveCfg = Debug|x64\n"\t" + guid + ".DebugFast-Clang|x64.Build.0 = Debug|x64\n"\t" + guid + ".Devel-Clang|ARM64.ActiveCfg = Debug|x64\n"\t" + guid + ".Devel-Clang|x64.ActiveCfg = Debug|x64\n"\t" + guid + ".Devel-Clang|x64.Build.0 = Debug|x64\n"\t" + guid + ".Release|ARM64.ActiveCfg = Release|x64\n"\t" + guid + ".Release|x64.ActiveCfg = Release|x64\n"\t" + guid + ".Release|x64.Build.0 = Release|x64\n"\t" + guid + ".Release-Clang|ARM64.ActiveCfg = Release|x64\n"\t" + guid + ".Release-Clang|x64.ActiveCfg = Release|x64\n"\t" + guid + ".Release-Clang|x64.Build.0 = Release|x64\n"\t" + guid + ".ReleaseLTCG|ARM64.ActiveCfg = Release|x64\n"\t" + guid + ".ReleaseLTCG|x64.ActiveCfg = Release|x64\n"\t" + guid + ".ReleaseLTCG|x64.Build.0 = Release|x64\n"\t" + guid + ".ReleaseLTCG-Clang|ARM64.ActiveCfg = Release|x64\n"\t" + guid + ".ReleaseLTCG-Clang|x64.ActiveCfg = Release|x64\n"\t" + guid + ".ReleaseLTCG-Clang|x64.Build.0 = Release|x64\n"
-              sln = re.sub(r"(GlobalSection\(ProjectConfigurationPlatforms\)[^\n]*\n)", lambda m: m.group(1) + cfg, sln)
-              with open("duckstation/duckstation.sln","w") as f: f.write(sln)
-              print(".sln patched")
-          with open("duckstation/src/core/core.vcxproj","r") as f: p = f.read()
-          if "rsil" not in p:
-              p = p.replace("dep\\fast_float\\include;", "dep\\fast_float\\include;$(SolutionDir)dep\\rsil\\include;")
-              p = p.replace("</ProjectReference>", '</ProjectReference>\n    <ProjectReference Include="..\\..\\dep\\rsil\\rsil.vcxproj"></ProjectReference>', 1)
-              with open("duckstation/src/core/core.vcxproj","w") as f: f.write(p)
-              print("core.vcxproj patched")
-          PYEND
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Build
-        shell: cmd
-        run: msbuild "duckstation\duckstation.sln" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /v:minimal
-
-      - name: Package with Qt plugins
-        shell: bash
-        run: |
-          set -e
-          PKG="duckstation-rsil-windows-x64"
+cfg = ""
+for c in ["Debug|ARM64","Debug|x64","Debug-Clang|ARM64","Debug-Clang|x64","Debug-Clang-SSE2|ARM64","Debug-Clang-SSE2|x64","DebugFast|ARM64","DebugFast|x64","DebugFast-Clang|ARM64","DebugFast-Clang|x64","Devel-Clang|ARM64","Devel-Clang|x64","Release|ARM64","Release|x64","Release-Clang|ARM64","Release-Clang|x64","ReleaseLTCG|ARM64","ReleaseLTCG|x64","ReleaseLTCG-Clang|ARM64","ReleaseLTCG-Clang|x64"]:
+    config, plat = c.split("|")
+    target = "Debug|x64" if ("Debug" in config or "Devel" in config) else "Release|x64"
+    cfg += "\t" + guid + "." + c + ".ActiveCfg = " + target + "\n"
+    if plat == "x64":
+        cfg += "\t" + guid + "." + c + ".Build.0 = " + target + "\n"
           rm -rf "$PKG"; mkdir -p "$PKG"
           BIN=""
           for c in "duckstation/build/Release-x64/bin" "duckstation/bin/Release" "duckstation/bin"; do
