@@ -121,21 +121,21 @@ jobs:
       - name: Build
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installerswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) do set MSBUILD=%%i
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installerswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) do set MSBUILD=%%i
           cd duckstation
           "%MSBUILD%" duckstation.sln /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /m /v:minimal
 
       - name: Package
         shell: cmd
         run: |
-          echo. > duckstationind\portable.txt
-          mkdir duckstationind\settings 2>nul
-          echo [draw_distance] > duckstationind\settings\settings.ini
-          echo enabled=true >> duckstationind\settings\settings.ini
-          echo multiplier=8.0 >> duckstationind\settings\settings.ini
-          echo min_score=5 >> duckstationind\settings\settings.ini
-          echo max_patches=64 >> duckstationind\settings\settings.ini
-          7z a duckstation-drawdistance.7z duckstationind\*
+          echo. > duckstationind\portable.txt
+          mkdir duckstationind\settings 2>nul
+          echo [draw_distance] > duckstationind\settings\settings.ini
+          echo enabled=true >> duckstationind\settings\settings.ini
+          echo multiplier=8.0 >> duckstationind\settings\settings.ini
+          echo min_score=5 >> duckstationind\settings\settings.ini
+          echo max_patches=64 >> duckstationind\settings\settings.ini
+          7z a duckstation-drawdistance.7z duckstationind\*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
